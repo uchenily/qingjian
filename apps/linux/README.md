@@ -192,4 +192,4 @@ page_keys = "[]"
 
 - 中英切换：MVP 阶段默认中文模式，未接 Caps Lock / fcitx5 中英切换机制（后续接）
 - 自渲染候选窗、偏好设置面板、菜单、云预测、神经重排序：推迟
-- 候选词的译文（释义）暂未在候选窗显示
+- 候选词的译文（释义）已通过 fcitx5 `CandidateWord::setComment` 显示在候选词右侧；序号用 `setLabels` 设为 1. 2. …，高亮用 `setCursorIndex`。样式受 fcitx5 面板主题限制，自绘候选窗推迟
