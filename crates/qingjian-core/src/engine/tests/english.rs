@@ -32,6 +32,18 @@ fn english_word_ranks_first_when_input_is_unlikely_pinyin() {
 }
 
 #[test]
+fn shuangpin_english_tail_joins_the_sentence() {
+    let dictionary = Dictionary::parse("我\two\t9000\n想\txiang\t9000\n学\txue\t9000\n").unwrap();
+    let mut engine = Engine::new(dictionary).with_english(WordList::parse("python\n").unwrap());
+    engine.set_shuangpin(Some(Scheme::Xiaohe));
+    engine.set_input("woxlxtpython");
+    let query = engine.query().unwrap();
+    assert_eq!(query.candidates.items[0].text, "我想学python");
+    assert_eq!(engine.commit(&query.candidates.items[0]), "我想学python");
+    assert!(engine.composition().is_empty());
+}
+
+#[test]
 fn usage_meter_counts_hanzi_words_and_english_words_per_commit() {
     let recorded = Arc::new(Mutex::new(Vec::new()));
     let mut engine = engine().with_usage_meter(Box::new(MemoryMeter(recorded.clone())));

@@ -35,17 +35,17 @@ impl Engine {
     /// 尾段要在英文词表里（个人表或随包表），头段要能切成每个音节都完整的拼音。
     /// 尾段自己就是完整拼音的（`database`、`fan`）要至少 [`MIN_PINYIN_LIKE_TAIL_LETTERS`] 个字母；
     /// 两个字母的尾段只认缩写词（ID / TV / OK）和个人表里的词：`to` / `it` 这类太容易撞上简拼。
-    /// 同时满足的取最长的尾段（`wodedatabase` 取 database 不取 base）。双拼、带 `'` 的输入不切；
+    /// 同时满足的取最长的尾段（`wodedatabase` 取 database 不取 base）。双拼按完整双拼音节边界切头段；带 `'` 的输入不切；
     /// 整段本身是英文词（`agent`）、拼音不像话时纠错能纠通（`shiide` → 是的）或有英文补全（`releas` → release）的也不切，
     /// 那几条路本来就排第一。
     /// 切出来只说明「可以这么读」，与拼音读法谁排前面看 `competes` 与比分。
     pub(crate) fn split_english_tail(&self, scope: &str) -> Option<EnglishTail> {
-        if self.shuangpin.is_some()
-            || scope.len() < MIN_ENGLISH_TAIL_HEAD_LETTERS + MIN_ENGLISH_TAIL_LETTERS
+        if scope.len() < MIN_ENGLISH_TAIL_HEAD_LETTERS + MIN_ENGLISH_TAIL_LETTERS
             || !scope.bytes().all(|b| b.is_ascii_lowercase())
         {
             return None;
         }
+        let shuangpin = self.shuangpin.is_some();
         let lists = self.english_lists();
         if lists.is_empty() {
             return None;
@@ -53,10 +53,10 @@ impl Engine {
         if lists.iter().any(|words| words.get(scope).is_some()) {
             return None;
         }
-        let full = parser::segment(scope).ok();
+        let full = (!shuangpin).then(|| parser::segment(scope).ok()).flatten();
         let unlikely = correction::unlikely_pinyin(full.as_ref().and_then(|s| s.first()), "")
             || correction::trailing_single_letter(full.as_ref().and_then(|s| s.first()));
-        if full.is_none() || unlikely {
+        if !shuangpin && (full.is_none() || unlikely) {
             // 拼写纠错能把整段纠成通顺的拼音（`shiide` → 是的，`yingagi` → 应该）：那是敲错，不是英文
             if self.active_correction(scope).is_some() {
                 return None;
@@ -84,13 +84,19 @@ impl Engine {
             if parser::is_fully_segmentable(tail) && len < MIN_PINYIN_LIKE_TAIL_LETTERS {
                 return None;
             }
-            if !parser::is_fully_segmentable(&scope[..head_len]) {
+            if shuangpin {
+                let decoded = self.decode(&scope[..head_len])?;
+                if !decoded.is_complete() || decoded.segmentation().is_none() {
+                    return None;
+                }
+            } else if !parser::is_fully_segmentable(&scope[..head_len]) {
                 return None;
             }
             Some(EnglishTail {
                 head_len,
                 word: word.to_owned(),
-                competes: full.is_some(),
+                // 双拼前缀已经按音节边界解码，尾部是否也能解码不应阻止英文尾段。
+                competes: !shuangpin && full.is_some(),
                 log_prob: english_log_prob(words.frequency(tail)),
             })
         })

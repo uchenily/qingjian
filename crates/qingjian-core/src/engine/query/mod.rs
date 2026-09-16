@@ -75,22 +75,23 @@ impl Engine {
         if is_raw(keys, self.modes(), self.shuangpin, self.zhuyin) {
             return Ok(self.query_raw(keys, rest, start));
         }
-        // 双拼先解成全拼（音节间已用 `'` 连好，切分没有歧义），之后与全拼同路；解不动的键当尾巴
+        // 双拼先解成全拼（音节间已用 `'` 连好，切分没有歧义）；英文尾段要先按原始键串切，
+        // 因为 rust / python 也可能恰好被双拼解码成若干音节。
         let decoded = self.decode(keys);
-        let scope: &str = decoded.as_ref().map_or(keys, |d| d.pinyin());
-        // 末尾是英文词（`woxiangxuehaorust`）：拼音候选与整句只按头段算，尾段整个跟在整句后面。
-        // 整段也能读成拼音时（`database`、`…rust` 当简拼）两种读法比分，英文赢了才按头段算，
-        // 输了整段按拼音读、英文读法排在拼音整句后面
-        let english_tail = if decoded.is_none() {
-            self.split_english_tail(keys)
-        } else {
-            None
-        };
+        let english_tail = self.split_english_tail(keys);
         let head_wins = english_tail
             .as_ref()
             .is_some_and(|t| !t.competes || self.mixed_beats_plain(keys, t));
-        let parsed = match (&decoded, &english_tail) {
-            (Some(d), _) => d
+        let decoded_head = english_tail
+            .as_ref()
+            .filter(|_| head_wins)
+            .and_then(|t| self.decode(&keys[..t.head_len]));
+        let query_decoded = decoded_head.as_ref().or(decoded.as_ref());
+        let scope: &str = query_decoded.map_or(keys, |d| d.pinyin());
+        // 末尾是英文词（`woxiangxuehaorust` / 小鹤 `woxlxt+rust`）：拼音候选与整句只按头段算，
+        // 尾段整个跟在整句后面。全拼会比较两种读法，双拼的尾段按英文词表直接采用。
+        let parsed = match (query_decoded, &english_tail) {
+            (Some(d), tail) if head_wins || tail.is_none() => d
                 .segmentation()
                 .map(|s| (vec![s], d.tail()))
                 .ok_or(ParseError::NoSegmentation),
@@ -150,7 +151,7 @@ impl Engine {
             let count = patterns.len();
             let last = &segmentation.syllables[count - 1];
             // 最后一个音节即使打完了也可能还没打完（`xia` 可能是 `xiang` 的前缀），按前缀查；双拼两键就是定局
-            if last.complete && decoded.is_none() && parser::is_syllable_prefix(&last.text) {
+            if last.complete && query_decoded.is_none() && parser::is_syllable_prefix(&last.text) {
                 patterns[count - 1].complete = false;
             }
             // 词级候选只按敲的原样与模糊音查，敲错变体只进整句词图（它的候选从那边插进来）：

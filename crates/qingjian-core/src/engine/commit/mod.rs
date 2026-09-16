@@ -353,8 +353,7 @@ impl Engine {
         candidate: &Candidate,
     ) -> Option<Vec<sentence::SentenceWord>> {
         let scope = self.composition.scope();
-        if self.decode(scope).is_none()
-            && let Some(tail) = self.split_english_tail(scope)
+        if let Some(tail) = self.split_english_tail(scope)
             && let Some(words) = self.mixed_words(scope, &tail, &candidate.text)
         {
             return Some(words);
@@ -379,7 +378,12 @@ impl Engine {
         tail: &EnglishTail,
         text: &str,
     ) -> Option<Vec<sentence::SentenceWord>> {
-        let segmentations = parser::segment(&scope[..tail.head_len]).ok()?;
+        let head = if self.shuangpin.is_some() {
+            self.decode(&scope[..tail.head_len])?.pinyin().to_owned()
+        } else {
+            scope[..tail.head_len].to_owned()
+        };
+        let segmentations = parser::segment(&head).ok()?;
         let mut conversion = self.convert_sentence(&segmentations.first()?.patterns(), true)?;
         conversion.text.push_str(&tail.word);
         if conversion.text != text {
@@ -397,6 +401,9 @@ impl Engine {
     /// 纠错生效时按纠正后的拼音算，再按那处编辑换算回原串；双拼按解出的全拼算，再换算回键数。
     pub(super) fn consumed_by(&self, candidate: &Candidate) -> (usize, String) {
         let keys = self.composition.scope();
+        if candidate.kind == CandidateKind::Sentence && self.split_english_tail(keys).is_some() {
+            return (keys.len(), keys.to_owned());
+        }
         if let Some(decoded) = self.decode(keys) {
             let pinyin_len = self.align(decoded.pinyin(), &candidate.syllables).consumed;
             return (
