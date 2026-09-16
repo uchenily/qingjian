@@ -60,6 +60,14 @@ pub fn apply(dispatch: &mut Dispatch, engine: &mut Engine, input: &KeyInput) -> 
     let super_ = input.modifiers & MOD_SUPER != 0;
     let command_like = ctrl || alt || super_;
 
+    // emacs 风格编辑键（仅组句中）：Ctrl-A/E 行首尾、Ctrl-W 删前一个音节、
+    // Ctrl-U 删到行首、Alt-F/B 按音节跳光标。不组句时交给应用。
+    if composing
+        && let Some(outcome) = apply_emacs(dispatch, engine, input, ctrl, alt)
+    {
+        return outcome;
+    }
+
     // 命令键组合（Ctrl/Alt/Super）除方向键外一律交给应用
     if command_like && !is_navigation(input.sym) {
         return KeyOutcome::passthrough();
@@ -119,6 +127,81 @@ pub fn apply(dispatch: &mut Dispatch, engine: &mut Engine, input: &KeyInput) -> 
         apply_chinese(dispatch, engine, c, shift)
     };
     with_prefix(flushed, effect, c)
+}
+
+/// emacs 风格编辑键（仅组句中调用）。返回 `Some` 表示已处理，`None` 表示不是 emacs 键、交给后续逻辑。
+///
+/// - Ctrl-A：光标到行首（`move_cursor_home`）
+/// - Ctrl-E：光标到行尾（`move_cursor_end`）
+/// - Ctrl-W：删掉光标前一个音节（`delete_syllable_backward`）
+/// - Ctrl-U：删掉光标前的全部拼音（`delete_to_start`）
+/// - Alt-F：光标右跳一个音节（`move_cursor_syllable_right`）
+/// - Alt-B：光标左跳一个音节（`move_cursor_syllable_left`）
+///
+/// 按 xkb keysym（字母的 sym 就是 ASCII 小写）+ 修饰键判断，不靠 `character`（Ctrl/Alt 会把字符变成控制字符）。
+const EMACS_A: u32 = 0x61;
+const EMACS_E: u32 = 0x65;
+const EMACS_W: u32 = 0x77;
+const EMACS_U: u32 = 0x75;
+const EMACS_F: u32 = 0x66;
+const EMACS_B: u32 = 0x62;
+
+fn apply_emacs(
+    dispatch: &mut Dispatch,
+    engine: &mut Engine,
+    input: &KeyInput,
+    ctrl: bool,
+    alt: bool,
+) -> Option<KeyOutcome> {
+    // Ctrl 组合：sym 是小写字母（0x61..0x7a）或大写字母（0x41..0x5a）
+    if ctrl && !alt {
+        let lower = if (b'A' as u32..=b'Z' as u32).contains(&input.sym) {
+            input.sym + 32
+        } else {
+            input.sym
+        };
+        let outcome = match lower {
+            EMACS_A => {
+                engine.move_cursor_home();
+                KeyOutcome::consumed(frame_after(dispatch, engine))
+            }
+            EMACS_E => {
+                engine.move_cursor_end();
+                KeyOutcome::consumed(frame_after(dispatch, engine))
+            }
+            EMACS_W => {
+                engine.delete_syllable_backward();
+                KeyOutcome::consumed(frame_after(dispatch, engine))
+            }
+            EMACS_U => {
+                engine.delete_to_start();
+                KeyOutcome::consumed(frame_after(dispatch, engine))
+            }
+            _ => return None,
+        };
+        return Some(outcome);
+    }
+    // Alt 组合：sym 是小写 / 大写字母
+    if alt && !ctrl {
+        let lower = if (b'A' as u32..=b'Z' as u32).contains(&input.sym) {
+            input.sym + 32
+        } else {
+            input.sym
+        };
+        let outcome = match lower {
+            EMACS_F => {
+                engine.move_cursor_syllable_right();
+                KeyOutcome::consumed(frame_after(dispatch, engine))
+            }
+            EMACS_B => {
+                engine.move_cursor_syllable_left();
+                KeyOutcome::consumed(frame_after(dispatch, engine))
+            }
+            _ => return None,
+        };
+        return Some(outcome);
+    }
+    None
 }
 
 /// 功能键处理：退格 / Esc / 回车 / Tab / 方向键 / 翻页 / Home / End / Delete。
