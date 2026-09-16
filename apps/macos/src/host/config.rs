@@ -18,6 +18,7 @@ impl Host {
             tracing::warn!(%error, "自定义短语配置未应用");
         }
         self.engine.set_mode_keys(config.shortcut.mode);
+        self.engine.set_chinese_first(config.general.chinese_first);
         self.engine.set_shuangpin(config.general.shuangpin());
         logging::set_level(config.general.log_level);
         self.translation_keys = config.shortcut.translation_keys();

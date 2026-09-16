@@ -12,6 +12,7 @@ pub(crate) enum Message {
     Shuangpin(Option<usize>),
     Zhuyin(bool),
     EnglishCandidates(bool),
+    ChineseFirst(bool),
     FullWidthPunctuation(bool),
     EnglishFullWidthPunctuation(bool),
     /// 开=写入平台默认名单，关=清空。
