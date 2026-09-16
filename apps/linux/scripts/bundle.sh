@@ -57,7 +57,17 @@ cmake -B "$BUILD_DIR" -S apps/linux/shim \
     -DCMAKE_INSTALL_PREFIX=/usr
 cmake --build "$BUILD_DIR"
 
-# ── 3. 组装包目录 ──
+# ── 3. 确保产品词库跟词库源同步 ──
+# data/ 被 gitignore，开发分支切换词库改动后本地 .qj 很容易还是旧的；
+# 发布 CI 下载的数据包并 touch 过生成文件，不会触发这里的重打包。
+if [[ -f assets/lexicon/dict.tsv && ( ! -f data/generated/dict.qj || assets/lexicon/dict.tsv -nt data/generated/dict.qj ) ]]; then
+    echo ">> 词库源较新，重打包基础词库"
+    cargo run --release -p qingjian-dict-convert --locked -- \
+        pack dict --input assets/lexicon/dict.tsv \
+        --name 青简基础词库 --license "MIT AND Unicode-3.0"
+fi
+
+# ── 4. 组装包目录 ──
 echo ">> 组装包目录"
 rm -rf "$DIST"
 mkdir -p "$DIST"
