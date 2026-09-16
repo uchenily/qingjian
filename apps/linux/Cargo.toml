@@ -1,0 +1,28 @@
+[package]
+name = "qingjian-linux"
+description = "Linux 输入法：fcitx5 外壳的 Rust 部分（Engine 装配、按键分派、帧生成），C++ shim 通过 C ABI 调用"
+version = "0.1.0-dev"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+# cdylib 给 C++ shim 链接，rlib 给测试与将来可能的纯 Rust 路线
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+qingjian-core.workspace = true
+qingjian-dictionary.workspace = true
+qingjian-learning.workspace = true
+qingjian-platform.workspace = true
+qingjian-predict.workspace = true
+qingjian-lm.workspace = true
+qingjian-translate.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-appender.workspace = true
+dotenvy.workspace = true
+
+[lints]
+workspace = true

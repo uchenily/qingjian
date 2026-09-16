@@ -21,8 +21,8 @@ use toml_edit::DocumentMut;
 use crate::error::ConfigError;
 
 pub use apps::{
-    AppsConfig, DEFAULT_ENGLISH_CANDIDATES_OFF, DEFAULT_ENGLISH_CANDIDATES_OFF_MACOS,
-    DEFAULT_ENGLISH_CANDIDATES_OFF_WINDOWS,
+    AppsConfig, DEFAULT_ENGLISH_CANDIDATES_OFF, DEFAULT_ENGLISH_CANDIDATES_OFF_LINUX,
+    DEFAULT_ENGLISH_CANDIDATES_OFF_MACOS, DEFAULT_ENGLISH_CANDIDATES_OFF_WINDOWS,
 };
 pub use dictionaries::{DEFAULT_DOMAINS, DictionariesConfig};
 pub use general::{DEFAULT_PAGE_KEYS, GeneralConfig, MAX_PAGE_SIZE, PAGE_KEY_OPTIONS};
@@ -79,9 +79,9 @@ fn deserialize_phrases<'de, D: serde::Deserializer<'de>>(
     Ok(phrases)
 }
 
-/// 模板的 `[apps]` 一节（macOS）：应用按 bundle identifier 认。名单要与 [`DEFAULT_ENGLISH_CANDIDATES_OFF`] 一致，
+/// 模板的 `[apps]` 一节（macOS）：应用按 bundle identifier 认。名单要与 [`DEFAULT_ENGLISH_CANDIDATES_OFF_MACOS`] 一致，
 /// 测试 `template_parses_to_defaults` 会核对。用宏而不是常量，是因为 `concat!` 只收字面量。
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
 macro_rules! template_apps {
     () => {
         r#"[apps]
@@ -115,7 +115,7 @@ english_candidates_off = [
 }
 
 /// 模板 `[shortcut]` 一节里的修饰键组合（macOS 命名）。缺省值两个平台一样，只是写法与注释按平台的键名。
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
 macro_rules! template_shortcut_keys {
     () => {
         r#"# 数字键配这些修饰键上屏候选的译词：translation 第一个译词，translation_second 第二个（候选右侧有两个译词时）
@@ -143,6 +143,38 @@ translation_second = "shift+ctrl"
 translate_selection = "ctrl+alt+t"
 # 数字键配这些修饰键删掉候选：用户词（云端选过的、自动造的）整个删掉，词库里的词清掉对它的学习记录。组句中要打感叹号先把词上屏
 delete_candidate = "shift"
+"#
+    };
+}
+
+/// 模板 `[shortcut]` 一节里的修饰键组合（Linux 键名：alt / ctrl / super，与 Windows 的 win 对应 super）。
+/// fcitx5 的修饰键在 shim 里映射成这套。
+#[cfg(all(unix, not(target_os = "macos")))]
+macro_rules! template_shortcut_keys {
+    () => {
+        r#"# 数字键配这些修饰键上屏候选的译词：translation 第一个译词，translation_second 第二个（候选右侧有两个译词时）
+# 任意修饰键组合（alt / shift / ctrl / super 用 + 连）；避开 ctrl+数字（系统切桌面）和 super+数字（桌面切工作区）
+translation = "alt"
+translation_second = "shift+alt"
+# 把应用里选中的文字译成学习语言（要开着云服务）：Linux 上还没接
+translate_selection = "ctrl+alt+t"
+# 数字键配这些修饰键删掉候选：用户词（云端选过的、自动造的）整个删掉，词库里的词清掉对它的学习记录。组句中要打感叹号先把词上屏
+delete_candidate = "shift"
+"#
+    };
+}
+
+/// 模板的 `[apps]` 一节（Linux）：应用按桌面进程名认（fcitx5 `InputContext::get_program`）。名单要与 [`DEFAULT_ENGLISH_CANDIDATES_OFF_LINUX`] 一致。
+#[cfg(all(unix, not(target_os = "macos")))]
+macro_rules! template_apps {
+    () => {
+        r#"[apps]
+# 按应用改行为，条目是桌面进程名（`*` 结尾按前缀匹配，如 jetbrains-* 覆盖所有 JetBrains IDE）
+# 英文模式（Caps Lock）下不给候选的应用：终端与代码编辑器里候选窗口会挡住应用自己的补全，vim 里 Tab 和方向键也另有含义。设成 [] 就处处都给
+english_candidates_off = [
+  "gnome-terminal-server", "kgx", "org.gnome.Console", "konsole", "xterm", "alacritty", "wezterm-gui", "kitty", "foot", "tmux",
+  "code", "code-insiders", "cursor", "zed", "jetbrains-*", "vim", "gvim", "neovide", "emacs", "sublime_text",
+]
 "#
     };
 }

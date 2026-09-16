@@ -48,13 +48,43 @@ pub const DEFAULT_ENGLISH_CANDIDATES_OFF_WINDOWS: &[&str] = &[
     "neovide.exe",
 ];
 
-/// 本平台的缺省名单：macOS 上是 bundle identifier，Windows 上是 exe 文件名。
+/// 缺省不给英文候选的应用（Linux，按桌面进程名 / WM_CLASS）。fcitx5 的 `InputContext` 能拿到应用进程名
+/// （`get_program`），终端与代码编辑器里英文候选窗口会挡住应用自己的补全，vim 里 Tab 与方向键也另有含义。
+/// `*` 结尾是前缀匹配。
+pub const DEFAULT_ENGLISH_CANDIDATES_OFF_LINUX: &[&str] = &[
+    "gnome-terminal-server",
+    "kgx", // GNOME Console
+    "org.gnome.Console",
+    "konsole",
+    "xterm",
+    "alacritty",
+    "wezterm-gui",
+    "kitty",
+    "foot",
+    "tmux",
+    "code",
+    "code-insiders",
+    "cursor",
+    "zed",
+    "jetbrains-*",
+    "vim",
+    "gvim",
+    "neovide",
+    "emacs",
+    "sublime_text",
+];
+
+/// 本平台的缺省名单：macOS 上是 bundle identifier，Windows 上是 exe 文件名，Linux 上是桌面进程名。
+#[cfg(target_os = "macos")]
+pub const DEFAULT_ENGLISH_CANDIDATES_OFF: &[&str] = DEFAULT_ENGLISH_CANDIDATES_OFF_MACOS;
+
+/// 本平台的缺省名单：macOS 上是 bundle identifier，Windows 上是 exe 文件名，Linux 上是桌面进程名。
 #[cfg(windows)]
 pub const DEFAULT_ENGLISH_CANDIDATES_OFF: &[&str] = DEFAULT_ENGLISH_CANDIDATES_OFF_WINDOWS;
 
-/// 本平台的缺省名单：macOS 上是 bundle identifier，Windows 上是 exe 文件名。
-#[cfg(not(windows))]
-pub const DEFAULT_ENGLISH_CANDIDATES_OFF: &[&str] = DEFAULT_ENGLISH_CANDIDATES_OFF_MACOS;
+/// 本平台的缺省名单：macOS 上是 bundle identifier，Windows 上是 exe 文件名，Linux 上是桌面进程名。
+#[cfg(all(unix, not(target_os = "macos")))]
+pub const DEFAULT_ENGLISH_CANDIDATES_OFF: &[&str] = DEFAULT_ENGLISH_CANDIDATES_OFF_LINUX;
 
 /// 配置文件 `[apps]` 分节：按应用改行为。应用的标识 macOS 上是 bundle identifier，Windows 上是宿主进程的 exe 文件名。
 ///
@@ -133,6 +163,18 @@ mod tests {
     }
 
     #[test]
+    fn linux_list_matches_process_names_with_prefix() {
+        let apps = AppsConfig::with_english_candidates_off(DEFAULT_ENGLISH_CANDIDATES_OFF_LINUX);
+        assert!(apps.english_candidates_off("gnome-terminal-server"));
+        assert!(apps.english_candidates_off("konsole"));
+        assert!(apps.english_candidates_off("code"));
+        assert!(apps.english_candidates_off("jetbrains-idea"));
+        assert!(apps.english_candidates_off("jetbrains-rustrover"));
+        assert!(!apps.english_candidates_off("firefox"));
+        assert!(!apps.english_candidates_off(""));
+    }
+
+    #[test]
     fn default_list_follows_the_platform() {
         let apps = AppsConfig::default();
         assert_eq!(
@@ -142,8 +184,13 @@ mod tests {
         );
         assert_eq!(
             apps.english_candidates_off("com.microsoft.VSCode"),
-            !cfg!(windows),
+            cfg!(target_os = "macos"),
             "macOS 缺省名单按 bundle identifier"
+        );
+        assert_eq!(
+            apps.english_candidates_off("gnome-terminal-server"),
+            cfg!(all(unix, not(target_os = "macos"))),
+            "Linux 缺省名单按桌面进程名"
         );
     }
 
