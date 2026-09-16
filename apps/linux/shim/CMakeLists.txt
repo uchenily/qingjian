@@ -50,9 +50,11 @@ target_include_directories(qingjian PRIVATE
 target_link_libraries(qingjian PRIVATE Fcitx5::Core)
 target_link_libraries(qingjian PRIVATE "${RUST_LIB}")
 # 让 libqingjian.so 运行时能找到 libqingjian_linux.so：靠 $ORIGIN RPATH
+# 直接用链接器标志写死 $ORIGIN，并跳过 CMake 自动加的构建机绝对路径 RPATH。
 set_target_properties(qingjian PROPERTIES
+    SKIP_BUILD_RPATH ON
     INSTALL_RPATH "$ORIGIN"
-    BUILD_RPATH "${RUST_LIB_DIR}")
+    LINK_FLAGS "-Wl,-rpath,\$ORIGIN")
 
 # 安装
 install(TARGETS qingjian

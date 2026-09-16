@@ -1,0 +1,94 @@
+# Linux 安装包滚动构建：每次推 feat/linux-fcitx5 或合并 PR 都打包，发到固定的 rolling release（每次覆盖，只留最新一个）。
+# 用户从 release 页下 qingjian-<版本>-linux-x86_64.tar.gz，解压 sudo ./install.sh 即用，不需要编译环境。
+#
+# 与 macOS / Windows 的 release.yml 不同：那个是打标签才发版（正式版），这个是滚动跟踪 feat/linux-fcitx5（最新版）。
+# 正式发版时可以另打 linux-v<版本> 标签走类似流程，这里先做滚动版。
+#
+# actions 钉到 commit（注释里是对应的标签），Dependabot 每周更新；产品数据从滚动的 data Release 下载。
+name: linux-release
+
+on:
+  push:
+    branches: [feat/linux-fcitx5]
+  workflow_dispatch:  # 手动触发
+
+permissions:
+  contents: write  # 要创建 / 更新 release
+
+concurrency:
+  group: linux-release
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+        with:
+          toolchain: 1.96.0
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      - name: Install fcitx5 development packages
+        run: |
+          # Ubuntu 24.04 的 fcitx5 包在 universe 仓库，先启用
+          sudo add-apt-repository universe -y
+          sudo apt-get update
+          # Ubuntu/Debian 包名是 libfcitx5core-dev
+          sudo apt-get install -y fcitx5 libfcitx5core-dev cmake
+
+      - name: Fetch product data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p data/generated data/model
+          # 产品数据在上游 qingjian-team/qingjian 的 data release 里
+          gh release download data \
+            --repo qingjian-team/qingjian \
+            --pattern qingjian-data.tar.gz \
+            --pattern SHA256SUMS \
+            --dir data
+          # SHA256SUMS 含三个文件，我们只下 qingjian-data.tar.gz，单独校验它
+          (cd data && grep qingjian-data.tar.gz SHA256SUMS | sha256sum -c)
+          tar -xzf data/qingjian-data.tar.gz -C data/generated
+          ls -la data/generated
+
+      - name: Build package
+        run: bash apps/linux/scripts/bundle.sh
+
+      - name: Upload to rolling release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # 找到打包出来的 tar.gz
+          TARBALL="$(ls target/dist/qingjian-*-linux-*.tar.gz | head -1)"
+          echo "上传 $TARBALL 到 rolling release"
+
+          # rolling release 的 tag 固定为 linux-latest；不存在就建，存在就更新
+          if ! gh release view linux-latest >/dev/null 2>&1; then
+            gh release create linux-latest \
+              --title "青简 Linux 最新版" \
+              --notes "每次推 feat/linux-fcitx5 自动构建，覆盖旧版本。下载最新的 .tar.gz，解压后 sudo ./install.sh。" \
+              --prerelease
+          else
+            # 清掉旧资产（gh release upload --clobber 也能覆盖，但先删干净避免残留）
+            gh release delete-asset linux-latest "$(basename "$TARBALL")" --yes 2>/dev/null || true
+          fi
+
+          gh release upload linux-latest "$TARBALL" --clobber
+
+          # 记下构建信息（提交、时间），写进 release notes
+          COMMIT="$(git rev-parse --short HEAD)"
+          DATE="$(date -u +%Y-%m-%d\ %H:%M\ UTC)"
+          gh release edit linux-latest \
+            --notes "每次推 feat/linux-fcitx5 自动构建，覆盖旧版本。下载最新的 .tar.gz，解压后 sudo ./install.sh。
+
+          最新构建：$COMMIT · $DATE"

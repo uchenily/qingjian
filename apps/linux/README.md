@@ -26,7 +26,7 @@ C++ shim 只做「fcitx5 事件 → C ABI → fcitx5 InputPanel」的翻译，�
 
 - Rust 1.96.0（工作区 `rust-toolchain.toml` 指定）
 - C++20 编译器
-- fcitx5 开发包（Fedora: `fcitx5-devel`，Debian/Ubuntu: `libfcitx5-dev`）
+- fcitx5 开发包（Fedora: `fcitx5-devel`，Ubuntu/Debian: `libfcitx5core-dev`）
 - CMake ≥ 3.16
 
 ## 构建
