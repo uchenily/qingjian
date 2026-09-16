@@ -24,7 +24,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -39,10 +39,11 @@ jobs:
 
       - name: Install fcitx5 development packages
         run: |
-          # Ubuntu 24.04 的 fcitx5 包在 universe 仓库，先启用
+          # fcitx5 包在 universe 仓库，先启用
           sudo add-apt-repository universe -y
           sudo apt-get update
-          # Ubuntu/Debian 包名是 libfcitx5core-dev
+          # Ubuntu/Debian 包名是 libfcitx5core-dev；Ubuntu 26.04 自带 fcitx5 5.1.19，
+          # 满足 setComment / setCursorIndex（5.1.9+）要求
           sudo apt-get install -y fcitx5 libfcitx5core-dev cmake
 
       - name: Fetch product data
