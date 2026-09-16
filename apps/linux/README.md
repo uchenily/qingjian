@@ -31,6 +31,8 @@ C++ shim 只做「fcitx5 事件 → C ABI → fcitx5 InputPanel」的翻译，�
 
 ## 构建
 
+### 开发者：从源码构建安装
+
 ```sh
 # 1. 编译 Rust cdylib
 cargo build --release -p qingjian-linux
@@ -39,6 +41,31 @@ cargo build --release -p qingjian-linux
 cmake -B apps/linux/shim/build -S apps/linux/shim -DCMAKE_BUILD_TYPE=Release
 cmake --build apps/linux/shim/build
 ```
+
+### 打包：生成通用安装包（用户不需要编译环境）
+
+打包脚本会编译 `.so`、组装数据文件、打成 `.tar.gz`，附带安装 / 卸载脚本：
+
+```sh
+# 先下载产品数据（见「数据目录」），然后：
+bash apps/linux/scripts/bundle.sh
+# 产出 target/dist/qingjian-<版本>-linux-x86_64.tar.gz
+```
+
+用户拿到包后：
+
+```sh
+tar -xzf qingjian-*-linux-x86_64.tar.gz
+cd qingjian-*-linux-x86_64
+sudo ./install.sh          # 装到 /usr
+fcitx5 -r                  # 重启 fcitx5
+# 在 fcitx5 配置工具里把「青简」加到输入法列表
+```
+
+卸载：`sudo ./uninstall.sh`
+
+包内含 `.so` + fcitx5 配置 + 词库 / 释义 / 语言模型，用户机器只要装了 fcitx5 就能用，
+不需要 Rust / C++ / CMake。
 
 ## 安装
 

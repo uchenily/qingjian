@@ -46,16 +46,31 @@ fn dev_root() -> Option<PathBuf> {
     has_resources(dev_root).then(|| dev_root.to_path_buf())
 }
 
-/// 一个目录是不是数据根：有 `data` 或 `assets` 子目录就算。
+/// 一个目录是不是数据根：有 `data` 或 `assets` 子目录（开发布局），
+/// 或直接有 `dict.qj` / `dict.tsv`（安装布局）就算。
 fn has_resources(dir: &std::path::Path) -> bool {
-    dir.join("data").is_dir() || dir.join("assets").is_dir()
+    dir.join("data").is_dir()
+        || dir.join("assets").is_dir()
+        || dir.join("dict.qj").is_file()
+        || dir.join("dict.tsv").is_file()
 }
 
-/// 某个资源文件的完整路径（相对数据根，如 `data/generated/dict.qj`）；不存在为 `None`。
+/// 某个资源文件的完整路径（相对数据根，如 `data/generated/dict.qj` 或 `dict.qj`）；不存在为 `None`。
+///
+/// 兼容两种布局：
+/// - 开发布局：文件在 `<根>/data/generated/dict.qj`（仓库里）
+/// - 安装布局：文件在 `<根>/dict.qj`（`/usr/share/qingjian` 下，打包脚本装的）
+///
+/// 先按原路径找，找不到就把 `data/generated/` 前缀去掉再找（适配安装布局）。
 pub fn resource(rel: &str) -> Option<PathBuf> {
     data_root().and_then(|root| {
         let path = root.join(rel);
-        path.is_file().then_some(path)
+        path.is_file().then_some(path).or_else(|| {
+            // 去掉 `data/generated/` 前缀，适配安装布局
+            let stripped = rel.strip_prefix("data/generated/").unwrap_or(rel);
+            let installed = root.join(stripped);
+            installed.is_file().then_some(installed)
+        })
     })
 }
 
@@ -74,11 +89,15 @@ pub fn config_file() -> Option<PathBuf> {
     user_dir().map(|dir| dir.join("config.toml"))
 }
 
-/// 随包的领域词库目录：`<data根>/data/generated/dicts/`；没有为 `None`。
+/// 随包的领域词库目录：`<data根>/data/generated/dicts/`（开发）或 `<data根>/dicts/`（安装）；没有为 `None`。
 pub fn bundled_dicts_dir() -> Option<PathBuf> {
     data_root().and_then(|root| {
-        let dir = root.join("data/generated/dicts");
-        dir.is_dir().then_some(dir)
+        let dev = root.join("data/generated/dicts");
+        if dev.is_dir() {
+            return Some(dev);
+        }
+        let installed = root.join("dicts");
+        installed.is_dir().then_some(installed)
     })
 }
 
