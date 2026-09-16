@@ -4,10 +4,13 @@ use super::*;
 /// 见 [`Engine::split_english_tail`]。
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct EnglishTail {
-    /// 头段（拼音）占作用域开头多少字节。
+    /// 英文词前的双拼 / 拼音占作用域开头多少字节。
     pub head_len: usize,
 
-    /// 尾段对应的英文词，按词表里的写法（`api` → API）。
+    /// 英文词在原始输入中的结束位置；旧的英文尾段这里等于整个作用域长度。
+    pub word_end: usize,
+
+    /// 英文词，按词表里的写法（`api` → API）。
     pub word: String,
 
     /// 整段字母也能读成拼音（`database` → da ta ba se，`woxiangxuehaorust` → … ru s… t… 简拼）：两种读法要比分，
@@ -49,6 +52,9 @@ impl Engine {
         let lists = self.english_lists();
         if lists.is_empty() {
             return None;
+        }
+        if shuangpin {
+            return self.split_shuangpin_english_tail(scope, &lists);
         }
         if lists.iter().any(|words| words.get(scope).is_some()) {
             return None;
@@ -94,12 +100,72 @@ impl Engine {
             }
             Some(EnglishTail {
                 head_len,
+                word_end: scope.len(),
                 word: word.to_owned(),
                 // 双拼前缀已经按音节边界解码，尾部是否也能解码不应阻止英文尾段。
                 competes: !shuangpin && full.is_some(),
                 log_prob: english_log_prob(words.frequency(tail)),
             })
         })
+    }
+
+    /// 在双拼原始键串中寻找一个英文词。英文词可以位于句中，前后都必须是完整双拼音节。
+    fn split_shuangpin_english_tail(
+        &self,
+        scope: &str,
+        lists: &[&qingjian_dictionary::WordList],
+    ) -> Option<EnglishTail> {
+        if lists.iter().any(|words| words.get(scope).is_some()) {
+            return None;
+        }
+        let personal = self.learner.user_english();
+        let min_head = MIN_ENGLISH_TAIL_HEAD_LETTERS;
+        let min_word = MIN_SHUANGPIN_ENGLISH_TAIL_LETTERS;
+        let max_start = scope.len().saturating_sub(min_word);
+        for start in min_head..=max_start {
+            if !scope.is_char_boundary(start) {
+                continue;
+            }
+            let Some(prefix) = self.decode(&scope[..start]) else {
+                continue;
+            };
+            if !prefix.is_complete() || prefix.segmentation().is_none() {
+                continue;
+            }
+            for end in ((start + min_word)..=scope.len()).rev() {
+                if !scope.is_char_boundary(end) {
+                    continue;
+                }
+                let typed = &scope[start..end];
+                let Some(words) = lists.iter().find(|words| words.get(typed).is_some()) else {
+                    continue;
+                };
+                let word = words.get(typed)?;
+                let acronym = word.bytes().any(|b| b.is_ascii_uppercase());
+                let known = personal.is_some_and(|known| known.get(typed).is_some());
+                if end - start < min_word && !acronym && !known {
+                    continue;
+                }
+                if parser::is_fully_segmentable(typed) && end - start < MIN_PINYIN_LIKE_TAIL_LETTERS
+                {
+                    continue;
+                }
+                if end < scope.len() {
+                    let suffix = self.decode(&scope[end..])?;
+                    if !suffix.is_complete() || suffix.segmentation().is_none() {
+                        continue;
+                    }
+                }
+                return Some(EnglishTail {
+                    head_len: start,
+                    word_end: end,
+                    word: word.to_owned(),
+                    competes: false,
+                    log_prob: english_log_prob(words.frequency(typed)),
+                });
+            }
+        }
+        None
     }
 
     /// 整段也能读成拼音时两种读法比分：头段整句的得分加英文词的 log 概率、扣掉切到英文的代价，高过整段按拼音读的整句就按英文读。
@@ -131,15 +197,67 @@ impl Engine {
         tail: &EnglishTail,
         typos: bool,
     ) -> Option<Candidate> {
-        let conversion = self.convert_sentence(&head.patterns(), typos)?;
+        let keys = self.composition.scope();
+        if self.shuangpin.is_none() {
+            let conversion = self.convert_sentence(&head.patterns(), typos)?;
+            if conversion.has_placeholder() {
+                return None;
+            }
+            let typed = &keys[tail.head_len..];
+            let mut syllables = conversion.syllables;
+            syllables.push(typed.to_owned());
+            return Some(Candidate {
+                text: format!("{}{}", conversion.text, tail.word),
+                kind: CandidateKind::Sentence,
+                syllables,
+                reading: None,
+                translation: None,
+            });
+        }
+        let (combined, prefix_len) = if self.shuangpin.is_some() {
+            let prefix = self.decode(&keys[..tail.head_len])?;
+            let suffix = self.decode(&keys[tail.word_end..]);
+            let mut combined = prefix.pinyin().to_owned();
+            if let Some(suffix) = suffix {
+                if !suffix.is_complete() {
+                    return None;
+                }
+                if !suffix.pinyin().is_empty() {
+                    if !combined.is_empty() {
+                        combined.push('\'');
+                    }
+                    combined.push_str(suffix.pinyin());
+                }
+            }
+            let prefix_len = prefix.segmentation()?.syllables.len();
+            (combined, prefix_len)
+        } else {
+            (keys[..tail.word_end].to_owned(), head.syllables.len())
+        };
+        let segmentation = parser::segment(&combined).ok()?.into_iter().next()?;
+        let conversion = self.convert_sentence(&segmentation.patterns(), typos)?;
         if conversion.has_placeholder() {
             return None;
         }
-        let typed = &self.composition.scope()[tail.head_len..];
+        let prefix_text = if prefix_len == 0 {
+            String::new()
+        } else {
+            let prefix = parser::segment(&combined).ok()?.into_iter().next()?;
+            self.convert_sentence(
+                &prefix.syllables[..prefix_len]
+                    .iter()
+                    .map(|s| s.pattern())
+                    .collect::<Vec<_>>(),
+                typos,
+            )?
+            .text
+        };
+        let suffix_text = &conversion.text[prefix_text.len()..];
+        let typed = &keys[tail.head_len..tail.word_end];
         let mut syllables = conversion.syllables;
-        syllables.push(typed.to_owned());
+        syllables.insert(prefix_len, typed.to_owned());
         Some(Candidate {
-            text: format!("{}{}", conversion.text, tail.word),
+            text: format!("{}{}{}", prefix_text, tail.word, suffix_text),
             kind: CandidateKind::Sentence,
             syllables,
             reading: None,

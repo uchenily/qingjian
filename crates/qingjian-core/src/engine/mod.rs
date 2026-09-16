@@ -251,6 +251,8 @@ const MIN_COMPLETION_LETTERS: usize = 3;
 /// 整段末尾当英文词的尾段至少几个字母，前面的拼音头至少几个字母（见 `query::EnglishTail`）。
 const MIN_ENGLISH_TAIL_LETTERS: usize = 2;
 const MIN_ENGLISH_TAIL_HEAD_LETTERS: usize = 2;
+/// 双拼键两两成音节，短英文串更容易被误切成拼音，至少四个字母才视为英文。
+const MIN_SHUANGPIN_ENGLISH_TAIL_LETTERS: usize = 4;
 
 /// 尾段自己也是合法拼音时（`fan`、`database`）至少几个字母才考虑英文读法：三个字母的拼音音节太多。
 const MIN_PINYIN_LIKE_TAIL_LETTERS: usize = 4;
@@ -379,10 +381,28 @@ fn is_raw(text: &str, modes: ModeKeys, shuangpin: Option<Scheme>, zhuyin: bool) 
             }
         }
     };
-    !text.is_empty()
-        && !modes.is_expression(text, zhuyin)
-        && !modes.is_question(text, zhuyin)
-        && text.chars().any(|c| !(is_key(c) || c == '\''))
+    if text.is_empty() || modes.is_expression(text, zhuyin) || modes.is_question(text, zhuyin) {
+        return false;
+    }
+    if text.chars().any(|c| !(is_key(c) || c == '\'')) {
+        // 标点只出现在已完成拼音之后时，仍保留中文候选；真正的英文直输段（如 hello,world）不受影响。
+        if let Some((prefix, suffix)) = text.split_once(|c: char| !(is_key(c) || c == '\'')) {
+            if !prefix.is_empty()
+                && suffix.chars().all(|c| c.is_ascii_punctuation())
+                && match shuangpin {
+                    Some(scheme) => {
+                        let decoded = scheme.decode(prefix);
+                        decoded.is_complete() && decoded.segmentation().is_some()
+                    }
+                    None => parser::is_fully_segmentable(prefix),
+                }
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+    false
 }
 
 /// 命中是否靠模糊音：某个音节不被敲的那个模式接受。

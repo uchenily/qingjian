@@ -62,9 +62,7 @@ pub fn apply(dispatch: &mut Dispatch, engine: &mut Engine, input: &KeyInput) -> 
 
     // emacs 风格编辑键（仅组句中）：Ctrl-A/E 行首尾、Ctrl-W 删前一个音节、
     // Ctrl-U 删到行首、Alt-F/B 按音节跳光标。不组句时交给应用。
-    if composing
-        && let Some(outcome) = apply_emacs(dispatch, engine, input, ctrl, alt)
-    {
+    if composing && let Some(outcome) = apply_emacs(dispatch, engine, input, ctrl, alt) {
         return outcome;
     }
 
@@ -419,7 +417,33 @@ fn apply_printable(
         return KeyOutcome::consumed(dispatch.current_frame(engine));
     }
     if c == ' ' {
-        let text = commit_highlighted(dispatch, engine);
+        let mut text = commit_highlighted(dispatch, engine);
+        append_punctuation_suffix(engine, &mut text);
+        return KeyOutcome::committed(text, frame_after(dispatch, engine));
+    }
+    // 中文候选后敲标点：先提交候选，再把标点作为文本流的一部分处理，避免整个缓冲区退化成英文直输。
+    // 这样 `nihc,zdjm` / `veuiufme?` 都只需在最后按一次空格。
+    let highlighted = dispatch.session().highlighted();
+    if c.is_ascii_punctuation()
+        && c != '\''
+        && !(c == ';' && engine.takes_semicolon())
+        && dispatch
+            .session()
+            .candidate(highlighted)
+            .is_some_and(|candidate| {
+                matches!(
+                    candidate.kind,
+                    qingjian_core::CandidateKind::Chinese | qingjian_core::CandidateKind::Sentence
+                )
+            })
+    {
+        let mut text = commit_highlighted(dispatch, engine);
+        if let Some(converted) = engine.punctuate(c) {
+            text.push_str(converted);
+        } else {
+            engine.note_passthrough(c);
+            text.push(c);
+        }
         return KeyOutcome::committed(text, frame_after(dispatch, engine));
     }
     // 表达式 / 问字模式下的其他字符：先把高亮候选上屏，再按非组句处理
@@ -438,6 +462,23 @@ fn apply_printable(
 fn commit_highlighted(dispatch: &mut Dispatch, engine: &mut Engine) -> String {
     let index = dispatch.session().highlighted();
     commit_index(dispatch, engine, index)
+}
+
+/// 选词后若缓冲区只剩标点，一次空格同时把标点转为中文标点并上屏。
+/// 不能对任意剩余内容这么做，否则会破坏「选前缀、继续输入」的行为。
+fn append_punctuation_suffix(engine: &mut Engine, text: &mut String) {
+    let pending = engine.composition().text().to_owned();
+    if pending.is_empty() || !pending.chars().all(|c| c.is_ascii_punctuation()) {
+        return;
+    }
+    let raw = engine.take_raw();
+    for c in raw.chars() {
+        if let Some(converted) = engine.punctuate(c) {
+            text.push_str(converted);
+        } else {
+            text.push(c);
+        }
+    }
 }
 
 /// 上屏第 `index` 个候选；没有候选时上屏拼音本身。

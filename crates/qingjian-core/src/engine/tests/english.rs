@@ -44,6 +44,52 @@ fn shuangpin_english_tail_joins_the_sentence() {
 }
 
 #[test]
+fn shuangpin_english_tail_requires_four_letters() {
+    let dictionary = Dictionary::parse("我\two\t9000\n想\txiang\t9000\n学\txue\t9000\n").unwrap();
+    let mut engine = Engine::new(dictionary).with_english(WordList::parse("key\n").unwrap());
+    engine.set_shuangpin(Some(Scheme::Xiaohe));
+    engine.set_input("woxlxtkey");
+    assert!(
+        !engine
+            .query()
+            .unwrap()
+            .candidates
+            .items
+            .iter()
+            .any(|candidate| candidate.text == "我想学key")
+    );
+}
+
+#[test]
+fn shuangpin_english_word_can_appear_before_more_chinese() {
+    let dictionary = Dictionary::parse(
+        "我\two\t9000\n想\txiang\t9000\n学\txue\t9000\n好\thao\t9000\n需\txu\t9000\n要\tyao\t9000\n怎\tzen\t9000\n么\tme\t9000\n办\tban\t9000\n",
+    )
+    .unwrap();
+    let mut engine = Engine::new(dictionary).with_english(WordList::parse("python\n").unwrap());
+    engine.set_shuangpin(Some(Scheme::Xiaohe));
+    engine.set_input("woxlxthcpythonxuyczfmebj");
+    let query = engine.query().unwrap();
+    assert_eq!(query.candidates.items[0].text, "我想学好python需要怎么办");
+    assert_eq!(
+        engine.commit(&query.candidates.items[0]),
+        "我想学好python需要怎么办"
+    );
+    assert!(engine.composition().is_empty());
+}
+
+#[test]
+fn punctuation_after_shuangpin_keeps_chinese_candidates() {
+    let dictionary = Dictionary::parse("我\two\t9000\n想\txiang\t9000\n学\txue\t9000\n").unwrap();
+    let mut engine = Engine::new(dictionary);
+    engine.set_shuangpin(Some(Scheme::Xiaohe));
+    engine.set_input("woxlxt?!");
+    let query = engine.query().unwrap();
+    assert!(!engine.raw_mode());
+    assert!(!query.candidates.items.is_empty());
+}
+
+#[test]
 fn usage_meter_counts_hanzi_words_and_english_words_per_commit() {
     let recorded = Arc::new(Mutex::new(Vec::new()));
     let mut engine = engine().with_usage_meter(Box::new(MemoryMeter(recorded.clone())));

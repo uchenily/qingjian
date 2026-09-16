@@ -378,23 +378,55 @@ impl Engine {
         tail: &EnglishTail,
         text: &str,
     ) -> Option<Vec<sentence::SentenceWord>> {
+        if self.shuangpin.is_none() {
+            let segmentations = parser::segment(&scope[..tail.head_len]).ok()?;
+            let mut conversion = self.convert_sentence(&segmentations.first()?.patterns(), true)?;
+            conversion.text.push_str(&tail.word);
+            if conversion.text != text {
+                return None;
+            }
+            conversion.words.push(sentence::SentenceWord {
+                text: tail.word.clone(),
+                syllables: vec![scope[tail.head_len..].to_owned()],
+                placeholder: false,
+            });
+            return Some(conversion.words);
+        }
         let head = if self.shuangpin.is_some() {
             self.decode(&scope[..tail.head_len])?.pinyin().to_owned()
         } else {
             scope[..tail.head_len].to_owned()
         };
-        let segmentations = parser::segment(&head).ok()?;
-        let mut conversion = self.convert_sentence(&segmentations.first()?.patterns(), true)?;
-        conversion.text.push_str(&tail.word);
-        if conversion.text != text {
+        let suffix = if self.shuangpin.is_some() {
+            self.decode(&scope[tail.word_end..])?.pinyin().to_owned()
+        } else {
+            String::new()
+        };
+        let mut pinyin = head.clone();
+        if !suffix.is_empty() {
+            if !pinyin.is_empty() {
+                pinyin.push('\'');
+            }
+            pinyin.push_str(&suffix);
+        }
+        let all = parser::segment(&pinyin).ok()?.into_iter().next()?;
+        let prefix = parser::segment(&head).ok()?.into_iter().next()?;
+        let prefix_conversion = self.convert_sentence(&prefix.patterns(), true)?;
+        let conversion = self.convert_sentence(&all.patterns(), true)?;
+        let suffix_text = &conversion.text[prefix_conversion.text.len()..];
+        let candidate_text = format!("{}{}{}", prefix_conversion.text, tail.word, suffix_text);
+        if candidate_text != text {
             return None;
         }
-        conversion.words.push(sentence::SentenceWord {
+        let mut words = prefix_conversion.words;
+        let prefix_word_count = words.len();
+        words.push(sentence::SentenceWord {
             text: tail.word.clone(),
-            syllables: vec![scope[tail.head_len..].to_owned()],
+            syllables: vec![scope[tail.head_len..tail.word_end].to_owned()],
             placeholder: false,
         });
-        Some(conversion.words)
+        words.extend(conversion.words.into_iter().skip(prefix_word_count));
+        Some(words)
     }
 
     /// 候选消耗多少作用域字节，以及按输入串记学习用的键（候选覆盖的那段全拼字母）。
