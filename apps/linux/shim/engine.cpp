@@ -51,15 +51,12 @@ std::string appOf(fcitx::InputContext* ic) {
 
 /// 候选词：持有文本与译文，select 时把文本 commit 给应用。
 /// （当前 MVP 由 Rust 侧在数字 / 空格选词时已 commit，这里 select 主要给鼠标点选用。）
+/// 译文暂不显示在候选窗（fcitx5 各版本对 setComment 支持不一，MVP 先不接）。
 class QingjianCandidateWord : public fcitx::CandidateWord {
 public:
     QingjianCandidateWord(fcitx::Text text, std::string translation)
         : fcitx::CandidateWord(std::move(text)),
-          translation_(std::move(translation)) {
-        if (!translation_.empty()) {
-            setComment(fcitx::Text(translation_));
-        }
-    }
+          translation_(std::move(translation)) {}
 
     void select(fcitx::InputContext* inputContext) const override {
         if (inputContext) {

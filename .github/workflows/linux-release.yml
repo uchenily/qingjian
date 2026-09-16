@@ -39,19 +39,25 @@ jobs:
 
       - name: Install fcitx5 development packages
         run: |
+          # Ubuntu 24.04 的 fcitx5 包在 universe 仓库，先启用
+          sudo add-apt-repository universe -y
           sudo apt-get update
-          sudo apt-get install -y fcitx5 libfcitx5-dev cmake
+          # Ubuntu/Debian 包名是 libfcitx5core-dev
+          sudo apt-get install -y fcitx5 libfcitx5core-dev cmake
 
       - name: Fetch product data
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p data/generated data/model
+          # 产品数据在上游 qingjian-team/qingjian 的 data release 里
           gh release download data \
+            --repo qingjian-team/qingjian \
             --pattern qingjian-data.tar.gz \
             --pattern SHA256SUMS \
             --dir data
-          (cd data && sha256sum -c SHA256SUMS)
+          # SHA256SUMS 含三个文件，我们只下 qingjian-data.tar.gz，单独校验它
+          (cd data && grep qingjian-data.tar.gz SHA256SUMS | sha256sum -c)
           tar -xzf data/qingjian-data.tar.gz -C data/generated
           ls -la data/generated
 
