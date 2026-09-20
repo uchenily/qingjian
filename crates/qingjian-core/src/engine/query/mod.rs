@@ -98,6 +98,11 @@ impl Engine {
             (None, Some(tail)) if head_wins => {
                 parser::segment(&keys[..tail.head_len]).map(|s| (s, ""))
             }
+            // 英文尾切法没赢（competes 且比分输给拼音整句）：按完整解码的全拼切分。
+            (Some(d), Some(_)) => d
+                .segmentation()
+                .map(|s| (vec![s], d.tail()))
+                .ok_or(ParseError::NoSegmentation),
             _ => segment_longest_prefix(keys),
         };
         // 连第一个字母都切不动（`impor`）：拼音这边没戏，但英文词 / 补全、快捷候选还可以有

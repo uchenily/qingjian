@@ -160,7 +160,9 @@ impl Engine {
                     head_len: start,
                     word_end: end,
                     word: word.to_owned(),
-                    competes: false,
+                    // 尾段也能解码成完整双拼时（`meds` → me+ds → 么东，与英文 meds 竞争），
+                    // 要和拼音整句比分，不能直接采用英文读法。
+                    competes: self.decode(typed).is_some_and(|d| d.is_complete()),
                     log_prob: english_log_prob(words.frequency(typed)),
                 });
             }
@@ -173,8 +175,17 @@ impl Engine {
     /// `wodedatabase`：我的 + database 赢过 我的大塔巴瑟；`womenqubeijing`：我们去北京 赢过 我们去 + Beijing；
     /// `taida`：太大 赢过 他 + Ida；`huoz`：或者 赢过 和 + Oz。
     pub(super) fn mixed_beats_plain(&self, scope: &str, tail: &EnglishTail) -> bool {
+        // 双拼下 scope 是原始键串，parser::segment 切不动；先 decode 成全拼再切。
+        let decode = |text: &str| -> Option<String> {
+            if self.shuangpin.is_some() {
+                self.decode(text).map(|d| d.pinyin().to_owned())
+            } else {
+                Some(text.to_owned())
+            }
+        };
         let convert = |text: &str, whole: bool| {
-            let segmentations = parser::segment(text).ok()?;
+            let pinyin = decode(text)?;
+            let segmentations = parser::segment(&pinyin).ok()?;
             self.convert_sentence_with(&segmentations.first()?.patterns(), true, whole)
         };
         let (Some(head), Some(plain)) = (

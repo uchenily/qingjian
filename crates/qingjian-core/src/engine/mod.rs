@@ -386,19 +386,18 @@ fn is_raw(text: &str, modes: ModeKeys, shuangpin: Option<Scheme>, zhuyin: bool) 
     }
     if text.chars().any(|c| !(is_key(c) || c == '\'')) {
         // 标点只出现在已完成拼音之后时，仍保留中文候选；真正的英文直输段（如 hello,world）不受影响。
-        if let Some((prefix, suffix)) = text.split_once(|c: char| !(is_key(c) || c == '\'')) {
-            if !prefix.is_empty()
-                && suffix.chars().all(|c| c.is_ascii_punctuation())
-                && match shuangpin {
-                    Some(scheme) => {
-                        let decoded = scheme.decode(prefix);
-                        decoded.is_complete() && decoded.segmentation().is_some()
-                    }
-                    None => parser::is_fully_segmentable(prefix),
+        if let Some((prefix, suffix)) = text.split_once(|c: char| !(is_key(c) || c == '\''))
+            && !prefix.is_empty()
+            && suffix.chars().all(|c| c.is_ascii_punctuation())
+            && match shuangpin {
+                Some(scheme) => {
+                    let decoded = scheme.decode(prefix);
+                    decoded.is_complete() && decoded.segmentation().is_some()
                 }
-            {
-                return false;
+                None => parser::is_fully_segmentable(prefix),
             }
+        {
+            return false;
         }
         return true;
     }

@@ -78,6 +78,49 @@ fn shuangpin_english_word_can_appear_before_more_chinese() {
     assert!(engine.composition().is_empty());
 }
 
+/// 双拼下尾段既能解码成拼音又是英文词时（`meds` → me+ds → 么东，与英文 meds 竞争），
+/// 拼音整句应胜出，不能把英文词原样塞进中文（`veuiufmedsxi` → "这是什么东西"，不是 "这是神meds系"）。
+#[test]
+fn shuangpin_pinyin_like_tail_beats_english_word() {
+    let dictionary = Dictionary::parse(
+        "这	zhe	9000
+是	shi	9000
+什	shen	9000
+么	me	9000
+东	dong	9000
+西	xi	9000
+\
+         这是什么	zhe shi shen me	8000
+东西	dong xi	8000
+这是什么东西	zhe shi shen me dong xi	9000
+",
+    )
+    .unwrap();
+    let mut engine = Engine::new(dictionary).with_english(WordList::parse("meds\n").unwrap());
+    engine.set_shuangpin(Some(Scheme::Xiaohe));
+    engine.set_input("veuiufmedsxi");
+    let query = engine.query().unwrap();
+    // 切分应是完整拼音，不是 头段 + 英文尾
+    assert_eq!(query.tail, "");
+    let first = &query.candidates.items[0];
+    assert_eq!(first.text, "这是什么东西");
+    // 不能出现把 meds 原样塞进中文的候选
+    assert!(
+        !query
+            .candidates
+            .items
+            .iter()
+            .any(|c| c.text.contains("meds")),
+        "不应出现含英文 meds 的候选，实际：{:?}",
+        query
+            .candidates
+            .items
+            .iter()
+            .map(|c| &c.text)
+            .collect::<Vec<_>>()
+    );
+}
+
 #[test]
 fn punctuation_after_shuangpin_keeps_chinese_candidates() {
     let dictionary = Dictionary::parse("我\two\t9000\n想\txiang\t9000\n学\txue\t9000\n").unwrap();
