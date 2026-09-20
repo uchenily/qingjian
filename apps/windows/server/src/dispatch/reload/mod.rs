@@ -108,7 +108,6 @@ impl Router {
         self.engine.set_zhuyin_mode(config.general.zhuyin);
         self.engine.set_mode_keys(config.shortcut.mode);
         self.engine.set_chinese_first(config.general.chinese_first);
-        let previous = self.config.render_settings();
         self.config = RouterConfig::from(config);
         self.reconcile_status();
         self.apply_model_config(&config.model);

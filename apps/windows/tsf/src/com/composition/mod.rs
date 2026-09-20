@@ -21,8 +21,15 @@ use self::sink::CompositionSink;
 use super::edit::{InputContext, anchor_rect, input_context};
 use super::service::SharedClient;
 
-/// 内联要显示的拼音行（跳过被纠错划掉的原字母）；空串表示没有组句内容。
+/// 内联预览要显示的文本：有候选时显示第一个候选（中文），没有候选时退回拼音行（跳过被纠错划掉的原字母）；空串表示没有组句内容。
+///
+/// 与 Linux fcitx5 前端一致：应用内预览区展示中文结果而非展开的拼音，富样式的拼音行仍在候选窗口顶部另画。
 pub(crate) fn preedit_string(frame: &Frame) -> String {
+    if let Some(first) = frame.candidates.items.first()
+        && !first.text.is_empty()
+    {
+        return first.text.clone();
+    }
     frame
         .preedit
         .iter()
@@ -173,4 +180,60 @@ fn move_selection_to_end(context: &ITfContext, ec: u32, range: &ITfRange) -> Res
     let result = unsafe { context.SetSelection(ec, std::slice::from_ref(&selection)) };
     drop(ManuallyDrop::into_inner(selection.range));
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use qingjian_core::Candidate;
+    use qingjian_platform::protocol::PreeditSegment;
+
+    fn frame(preedit: &[&str], candidates: &[&str]) -> Frame {
+        Frame {
+            preedit: preedit
+                .iter()
+                .map(|text| PreeditSegment {
+                    text: (*text).to_string(),
+                    kind: PreeditKind::Typed,
+                })
+                .collect(),
+            candidates: qingjian_core::CandidateList {
+                items: candidates
+                    .iter()
+                    .map(|text| Candidate {
+                        text: (*text).to_string(),
+                        kind: qingjian_core::CandidateKind::Chinese,
+                        syllables: Vec::new(),
+                        reading: None,
+                        translation: None,
+                    })
+                    .collect(),
+            },
+            ..Frame::default()
+        }
+    }
+
+    #[test]
+    fn shows_first_candidate_when_available() {
+        let frame = frame(&["ni'hao"], &["你好", "拟好"]);
+        assert_eq!(preedit_string(&frame), "你好");
+    }
+
+    #[test]
+    fn falls_back_to_pinyin_without_candidates() {
+        let frame = frame(&["h"], &[]);
+        assert_eq!(preedit_string(&frame), "h");
+    }
+
+    #[test]
+    fn falls_back_to_pinyin_when_first_candidate_empty() {
+        let frame = frame(&["h"], &[""]);
+        assert_eq!(preedit_string(&frame), "h");
+    }
+
+    #[test]
+    fn empty_frame_yields_empty() {
+        let frame = Frame::default();
+        assert_eq!(preedit_string(&frame), "");
+    }
 }
