@@ -379,15 +379,8 @@ impl QingjianInputController {
         self.note_application(&client);
         let mut composing = host::with(|h| !h.engine.composition().is_empty()).unwrap_or(false);
         let english = modifiers::caps_lock_on();
-        // 终端、编辑器这类应用（`[apps] english_candidates_off`）里英文模式是纯直通
-        let english_candidates = english
-            && host::with(|h| h.english_candidates_in(client.bundle_identifier().as_deref()))
-                .unwrap_or(false);
-        // 英文模式组词中 Caps Lock 灭了（或开关关了）：敲的字母先原样上屏，别把它们当拼音
-        if composing
-            && !english_candidates
-            && host::with(|h| h.engine.english_mode()).unwrap_or(false)
-        {
+        // 英文模式组词中 Caps Lock 灭了：敲的字母先原样上屏，别把它们当拼音
+        if composing && host::with(|h| h.engine.english_mode()).unwrap_or(false) {
             self.commit_raw(client);
             composing = false;
         }
@@ -404,62 +397,23 @@ impl QingjianInputController {
         };
         let c = char::from(*byte);
         host::with(|h| h.indicator.update());
-        // 缓冲区为空时敲 ? 先进问字模式，中英文模式都行：后面跟字母就是在问字，跟别的键就还原成问号
+        // 英文模式（Caps Lock 亮）彻底直通：不组句、不转标点、不弹候选窗，按键原样归应用。
+        // 切到英文模式时已 commit_pending，不会还在组句；防御性地把残留落定再放行。
+        if english {
+            if composing {
+                self.commit_raw(client);
+            }
+            host::with(|h| h.engine.note_passthrough(c));
+            return false;
+        }
+        // 缓冲区为空时敲 ? 先进问字模式
         if !composing && c == QUESTION_PREFIX {
             host::with(|h| h.engine.push(c));
             self.refresh(client);
             return true;
         }
         let question = composing && host::with(|h| h.engine.question_mode()).unwrap_or(false);
-        // 英文模式下问字：Caps Lock 让字母以大写送来，按小写收进问题
-        let c = if question && english && c.is_ascii_uppercase() {
-            c.to_ascii_lowercase()
-        } else {
-            c
-        };
-        host::with(|h| h.engine.set_english_mode(english_candidates && !question));
-        // Caps Lock 亮着 = 英文模式：不组句、不转标点，字母默认小写、按住 Shift 才大写
-        if english && !question {
-            // Caps Lock 亮着时 macOS 不管按没按 Shift 送来的都是大写，只能读 Shift 状态：按着才大写
-            let letter = if modifiers::shift_down() {
-                c.to_ascii_uppercase()
-            } else {
-                c.to_ascii_lowercase()
-            };
-            if !english_candidates {
-                if composing {
-                    self.commit_raw(client);
-                }
-                if c.is_ascii_alphabetic() {
-                    client.insert_text(&letter.to_string());
-                    host::with(|h| h.engine.note_passthrough(letter));
-                    return true;
-                }
-                host::with(|h| h.engine.note_passthrough(c));
-                return false;
-            }
-            // 英文候选：字母（以及组词中的数字、_ ' -）进缓冲区，候选来自英文词表；
-            // 空格、回车、标点先把敲的字母原样上屏再交给应用，数字键照常是数字。
-            // 选词靠 Tab 和方向键；用方向键动过高亮之后空格也选那个词（再把空格交给应用），
-            // 没动过的空格还是原样上屏——不选词时它和纯直通完全一样，打 kubectl 这类词表没有的词不会被补全替换
-            if c.is_ascii_alphabetic()
-                || (composing && (c.is_ascii_digit() || matches!(c, '_' | '\'' | '-')))
-            {
-                host::with(|h| h.engine.push(letter));
-                self.refresh(client);
-                return true;
-            }
-            if composing {
-                let navigated = host::with(|h| h.session.navigated).unwrap_or(false);
-                if c == ' ' && navigated {
-                    self.commit_highlighted(client);
-                } else {
-                    self.commit_raw(client);
-                }
-            }
-            host::with(|h| h.engine.note_passthrough(c));
-            return false;
-        }
+        host::with(|h| h.engine.set_english_mode(false));
         // 表达式模式（v 开头）：数字与运算符进缓冲区，不当选词 / 翻页键
         let expression = composing && host::with(|h| h.engine.expression_mode()).unwrap_or(false);
         // 英文直输段（缓冲区里已有 `-` 这类字符）：可见字符一律追加，空格 / 回车整段原样上屏

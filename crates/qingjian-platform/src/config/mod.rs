@@ -20,10 +20,7 @@ use toml_edit::DocumentMut;
 
 use crate::error::ConfigError;
 
-pub use apps::{
-    AppsConfig, DEFAULT_ENGLISH_CANDIDATES_OFF, DEFAULT_ENGLISH_CANDIDATES_OFF_LINUX,
-    DEFAULT_ENGLISH_CANDIDATES_OFF_MACOS, DEFAULT_ENGLISH_CANDIDATES_OFF_WINDOWS,
-};
+pub use apps::AppsConfig;
 pub use dictionaries::{DEFAULT_DOMAINS, DictionariesConfig};
 pub use general::{DEFAULT_PAGE_KEYS, GeneralConfig, MAX_PAGE_SIZE, PAGE_KEY_OPTIONS};
 pub use key_combo::KeyCombo;
@@ -79,37 +76,25 @@ fn deserialize_phrases<'de, D: serde::Deserializer<'de>>(
     Ok(phrases)
 }
 
-/// 模板的 `[apps]` 一节（macOS）：应用按 bundle identifier 认。名单要与 [`DEFAULT_ENGLISH_CANDIDATES_OFF_MACOS`] 一致，
+/// 模板的 `[apps]` 一节（macOS）：应用按 bundle identifier 认。
 /// 测试 `template_parses_to_defaults` 会核对。用宏而不是常量，是因为 `concat!` 只收字面量。
 #[cfg(target_os = "macos")]
 macro_rules! template_apps {
     () => {
         r#"[apps]
 # 按应用改行为，条目是 bundle identifier（`*` 结尾按前缀匹配）。开着「详细日志」时切到一个应用会把它的 bundle identifier 记进日志
-# 英文模式（Caps Lock）下不给候选的应用：终端与代码编辑器里候选窗口会挡住应用自己的补全，vim 里 Tab 和方向键也另有含义。设成 [] 就处处都给
-english_candidates_off = [
-  "com.apple.Terminal", "com.googlecode.iterm2", "dev.warp.Warp-Stable", "com.mitchellh.ghostty", "io.alacritty", "net.kovidgoyal.kitty",
-  "com.microsoft.VSCode", "com.todesktop.230313mzl4w4u92", "dev.zed.Zed", "com.jetbrains.*", "org.vim.MacVim", "com.sublimetext.*",
-  "com.apple.dt.Xcode", "com.neovide.neovide",
-]
+# 英文模式已改为彻底直通（不组句、不出候选、不转全角），按应用关闭候选的名单随之移除
 "#
     };
 }
 
-/// 模板的 `[apps]` 一节（Windows）：应用按宿主进程的 exe 文件名认。名单要与 [`DEFAULT_ENGLISH_CANDIDATES_OFF`] 一致。
+/// 模板的 `[apps]` 一节（Windows）：应用按宿主进程的 exe 文件名认。
 #[cfg(windows)]
 macro_rules! template_apps {
     () => {
         r#"[apps]
 # 按应用改行为，条目是应用进程的 exe 文件名（`*` 结尾按前缀匹配）。Server 开着 debug 日志时每开一个会话会把 exe 名记进日志
-# 英文模式（Caps Lock）下不给候选的应用：终端与代码编辑器里候选窗口会挡住应用自己的补全，vim 里 Tab 和方向键也另有含义。设成 [] 就处处都给
-# 经典控制台（cmd / PowerShell）的窗口属于 conhost.exe，Windows Terminal 是 WindowsTerminal.exe
-english_candidates_off = [
-  "conhost.exe", "WindowsTerminal.exe", "alacritty.exe", "wezterm-gui.exe", "mintty.exe",
-  "Code.exe", "Code - Insiders.exe", "Cursor.exe", "zed.exe",
-  "idea64.exe", "pycharm64.exe", "clion64.exe", "rustrover64.exe", "goland64.exe", "rider64.exe", "webstorm64.exe", "phpstorm64.exe", "datagrip64.exe",
-  "devenv.exe", "sublime_text.exe", "notepad++.exe", "gvim.exe", "neovide.exe",
-]
+# 英文模式已改为彻底直通（不组句、不出候选、不转全角），按应用关闭候选的名单随之移除
 "#
     };
 }
@@ -164,17 +149,13 @@ delete_candidate = "shift"
     };
 }
 
-/// 模板的 `[apps]` 一节（Linux）：应用按桌面进程名认（fcitx5 `InputContext::get_program`）。名单要与 [`DEFAULT_ENGLISH_CANDIDATES_OFF_LINUX`] 一致。
+/// 模板的 `[apps]` 一节（Linux）：应用按桌面进程名认（fcitx5 `InputContext::get_program`）。
 #[cfg(all(unix, not(target_os = "macos")))]
 macro_rules! template_apps {
     () => {
         r#"[apps]
 # 按应用改行为，条目是桌面进程名（`*` 结尾按前缀匹配，如 jetbrains-* 覆盖所有 JetBrains IDE）
-# 英文模式（Caps Lock）下不给候选的应用：终端与代码编辑器里候选窗口会挡住应用自己的补全，vim 里 Tab 和方向键也另有含义。设成 [] 就处处都给
-english_candidates_off = [
-  "gnome-terminal-server", "kgx", "org.gnome.Console", "konsole", "xterm", "alacritty", "wezterm-gui", "kitty", "foot", "tmux",
-  "code", "code-insiders", "cursor", "zed", "jetbrains-*", "vim", "gvim", "neovide", "emacs", "sublime_text",
-]
+# 英文模式已改为彻底直通（不组句、不出候选、不转全角），按应用关闭候选的名单随之移除
 "#
     };
 }
@@ -197,8 +178,6 @@ theme = "system"
 layout = "vertical"
 # 组句中的拼音显示在哪：both 行内和候选窗口 / inline 只在行内 / window 只在候选窗口（应用里不放 marked text）
 preedit = "both"
-# 英文模式（Caps Lock 亮着）是否给英文候选：Tab 或方向键选词，空格、回车、标点仍原样上屏敲的字母；false 就是纯直通
-english_candidates = true
 # 中文模式下整段输入是英文词时（hello / key）是否让中文候选排第一、英文词第二；缺省 false：拼音不像话的输入英文词排第一
 chinese_first = false
 # 中文模式下（没在组句时）敲的标点转全角：, . ? ! : ; ( ) 等，数字后面的 . 保持半角。Windows 上悬浮状态条的「，。」格可以点着切；macOS 在偏好设置中选择默认中文标点模式
@@ -520,7 +499,6 @@ mod tests {
         assert_eq!(config.general.layout, LayoutMode::Horizontal);
         assert_eq!(config.general.preedit, PreeditMode::Window);
         assert_eq!(config.general.learning_language, "en");
-        assert!(config.general.english_candidates);
         assert_eq!(config.general.shuangpin(), None);
         assert_eq!(config.general.log_level, LogLevel::Info);
         assert_eq!(config.shortcut.mode.expression, 'i');

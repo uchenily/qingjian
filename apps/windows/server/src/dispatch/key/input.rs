@@ -20,23 +20,31 @@ impl Router {
         if event.modifiers.has_command_key() {
             return Effect::Passthrough;
         }
+        // 持久英文模式彻底直通：不组句、不转全角、不弹候选窗，按键原样归应用。
+        // 切到英文模式时已 commit_pending，不会还在组句；防御性地把残留落定再放行。
+        if event.modifiers.english_mode {
+            if self.composing() {
+                let pending = self.engine.take_raw();
+                if !pending.is_empty() {
+                    return Effect::Changed(Some(pending));
+                }
+            }
+            return Effect::Passthrough;
+        }
         let Some(c) = event.character.filter(|c| !c.is_control()) else {
             return self.apply_function_key(event);
         };
-        // Caps 亮着无论中英模式都直接出大写英文；英文候选只在持久英文模式、Caps 灭、应用允许时给。
+        // Caps 亮着无论中英模式都直接出大写英文。
         let caps = event.modifiers.caps;
-        let english = caps || event.modifiers.english_mode;
-        let english_candidates = event.modifiers.english_mode
-            && !caps
-            && self.config.english_candidates_in(self.focused_app());
-        // 缓冲区为空时敲 `?` 先进问字模式，中英文模式都行：后面跟字母就是在问字，跟别的键就还原成问号。
+        let english = caps;
+        // 缓冲区为空时敲 `?` 先进问字模式
         if !self.composing() && c == QUESTION_PREFIX {
             self.engine.set_english_mode(false);
             self.engine.push(c);
             return Effect::Changed(None);
         }
         let question = self.composing() && self.engine.question_mode();
-        // 英文模式下问字：Caps 让字母以大写送来，按小写收进问题。
+        // Caps 亮时问字：字母以大写送来，按小写收进问题。
         let c = if question && english && c.is_ascii_uppercase() {
             c.to_ascii_lowercase()
         } else {
@@ -50,17 +58,13 @@ impl Router {
             }
             return with_prefix(Some(mark), self.apply_key(event), c);
         }
-        // 英文组词中候选被关掉（Caps 亮 / 切应用）：敲过的字母先原样上屏。
-        let flushed = (self.composing() && !english_candidates && self.engine.english_mode())
-            .then(|| self.engine.take_raw());
-        self.engine
-            .set_english_mode(english_candidates && !question);
+        self.engine.set_english_mode(false);
         let effect = if english && !question {
-            self.apply_english(c, english_candidates, event)
+            self.apply_english(c, event)
         } else {
             self.apply_chinese(c, event)
         };
-        with_prefix(flushed, effect, c)
+        with_prefix(None, effect, c)
     }
 
     /// 缓冲区里只有一个 `?`：清掉，还原成问号（按当前模式的全角设置转）。
@@ -89,7 +93,7 @@ impl Router {
         // 先动光标再插问号会插错位置，所以还原后一并吞掉。
         if self.engine.bare_question() && !matches!(event.virtual_key, codes::BACK | codes::ESCAPE)
         {
-            let english = event.modifiers.caps || event.modifiers.english_mode;
+            let english = event.modifiers.caps;
             return Effect::Changed(Some(self.restore_bare_question(english)));
         }
         match event.virtual_key {
@@ -166,7 +170,7 @@ impl Router {
 
     /// 当前模式开着全角就让 Core 转（数字后的 `.` 保持半角）；转不了的原样交给应用并告知 Core。
     fn apply_punctuation(&mut self, c: char, event: &KeyEvent) -> Effect {
-        let english = event.modifiers.caps || event.modifiers.english_mode;
+        let english = event.modifiers.caps;
         if self.full_width_for(english)
             && let Some(text) = self.engine.punctuate(c)
         {
@@ -178,33 +182,16 @@ impl Router {
 
     /// 英文模式。开着候选：字母进缓冲区，空格 / 标点先把字母原样上屏（动过高亮的空格才选词）；
     /// 关着候选：字母由我们插入（大小写按 Shift）。其他键按英文模式那份全角设置转，转不了的交给应用。
-    fn apply_english(&mut self, c: char, candidates: bool, event: &KeyEvent) -> Effect {
+    fn apply_english(&mut self, c: char, event: &KeyEvent) -> Effect {
         let composing = self.composing();
-        if !candidates {
-            let raw = composing.then(|| self.engine.take_raw());
-            let effect = if c.is_ascii_alphabetic() {
-                self.engine.note_passthrough(c);
-                Effect::Changed(Some(c.to_string()))
-            } else {
-                self.apply_punctuation(c, event)
-            };
-            return with_prefix(raw, effect, c);
-        }
-        if c.is_ascii_alphabetic()
-            || (composing && (c.is_ascii_digit() || matches!(c, '_' | '\'' | '-')))
-        {
-            self.engine.push(c);
-            return Effect::Changed(None);
-        }
-        let committed = composing.then(|| {
-            if c == ' ' && self.navigated {
-                self.commit_highlighted()
-            } else {
-                self.engine.take_raw()
-            }
-        });
-        let effect = self.apply_punctuation(c, event);
-        with_prefix(committed, effect, c)
+        let raw = composing.then(|| self.engine.take_raw());
+        let effect = if c.is_ascii_alphabetic() {
+            self.engine.note_passthrough(c);
+            Effect::Changed(Some(c.to_string()))
+        } else {
+            self.apply_punctuation(c, event)
+        };
+        with_prefix(raw, effect, c)
     }
 
     /// 组句中的可打印键：数字选当前页第 N 个，翻页键翻页，空格上屏高亮，其余进英文直输段。

@@ -89,9 +89,6 @@ pub enum Setting {
     /// `[general] preedit`，弹出菜单。
     Preedit,
 
-    /// `[general] english_candidates`，勾选框。
-    EnglishCandidates,
-
     /// `[general] chinese_first`，勾选框：中英混输时中文候选排在英文词前。
     ChineseFirst,
 
@@ -131,9 +128,6 @@ pub enum Setting {
     /// `[predict] slots`，弹出菜单 0–4：第一页末尾留给云端词的格数。
     CloudSlots,
 
-    /// `[apps] english_candidates_off`，勾选框：勾上写缺省的终端 / 编辑器列表，去掉写空表。
-    EnglishCandidatesOffInApps,
-
     /// `[shortcut] delete_candidate`，快捷键录制按钮（只记修饰键）。
     DeleteCandidateKeys,
 
@@ -169,7 +163,6 @@ impl Setting {
             Self::OpenConfigFile => 11,
             Self::Layout => 12,
             Self::Preedit => 13,
-            Self::EnglishCandidates => 14,
             Self::ChineseFirst => 42,
             Self::TranslationKeys => 15,
             Self::TranslationSecondKeys => 16,
@@ -181,7 +174,6 @@ impl Setting {
             Self::OpenLogDirectory => 22,
             Self::CopyDiagnostics => 23,
             Self::CloudSlots => 24,
-            Self::EnglishCandidatesOffInApps => 25,
             Self::DeleteCandidateKeys => 26,
             Self::InputLog => 27,
             Self::ClearInputLog => 28,
@@ -218,7 +210,6 @@ impl Setting {
             11 => Self::OpenConfigFile,
             12 => Self::Layout,
             13 => Self::Preedit,
-            14 => Self::EnglishCandidates,
             42 => Self::ChineseFirst,
             15 => Self::TranslationKeys,
             16 => Self::TranslationSecondKeys,
@@ -230,7 +221,6 @@ impl Setting {
             22 => Self::OpenLogDirectory,
             23 => Self::CopyDiagnostics,
             24 => Self::CloudSlots,
-            25 => Self::EnglishCandidatesOffInApps,
             26 => Self::DeleteCandidateKeys,
             27 => Self::InputLog,
             28 => Self::ClearInputLog,
@@ -283,7 +273,6 @@ mod tests {
             Setting::OpenConfigFile,
             Setting::Layout,
             Setting::Preedit,
-            Setting::EnglishCandidates,
             Setting::TranslationKeys,
             Setting::TranslationSecondKeys,
             Setting::TranslateSelectionKeys,
@@ -294,7 +283,6 @@ mod tests {
             Setting::OpenLogDirectory,
             Setting::CopyDiagnostics,
             Setting::CloudSlots,
-            Setting::EnglishCandidatesOffInApps,
             Setting::DeleteCandidateKeys,
             Setting::InputLog,
             Setting::ClearInputLog,

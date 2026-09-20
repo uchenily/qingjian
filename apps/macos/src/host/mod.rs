@@ -37,9 +37,8 @@ use qingjian_learning::{FrequencyLearner, InputLog, UsageStats, VocabularyBook};
 use qingjian_lm::BigramModel;
 use qingjian_platform::extra_dictionaries;
 use qingjian_platform::{
-    AppsConfig, DEFAULT_ENGLISH_CANDIDATES_OFF, DictionariesConfig, KeyCombo, LayoutMode,
-    LocalModelConfig, LogLevel, Modifiers, PAGE_KEY_OPTIONS, PreeditMode, ShortcutConfig,
-    ThemeMode,
+    DictionariesConfig, KeyCombo, LayoutMode, LocalModelConfig, LogLevel, Modifiers,
+    PAGE_KEY_OPTIONS, PreeditMode, ShortcutConfig, ThemeMode,
 };
 use qingjian_predict::{
     CloudGlossFiller, CloudPredictor, ConnectionTest, PredictConfig, PredictError,
@@ -140,12 +139,6 @@ pub struct Host {
 
     /// 组句中的拼音显示在行内、候选窗口还是两处。
     pub preedit_mode: PreeditMode,
-
-    /// 英文模式是否给英文候选（配置 `[general] english_candidates`）。
-    pub english_candidates: bool,
-
-    /// 按应用的行为（配置 `[apps]`）：哪些应用里英文模式不给候选。
-    pub apps: AppsConfig,
 
     /// 联想结果轮询定时器。
     pub monitor: PredictMonitor,

@@ -32,7 +32,6 @@ fn string_combo(
 
 pub(crate) fn view(settings: &Settings, context: &mut ViewContext<Settings>) -> View {
     let g = &settings.config.general;
-    let english_off = !settings.config.apps.english_candidates_off.is_empty();
     let rows = [
         field(
             "学习语言",
@@ -81,21 +80,6 @@ pub(crate) fn view(settings: &Settings, context: &mut ViewContext<Settings>) -> 
             ToggleSwitch::new()
                 .is_on(g.english_full_width_punctuation)
                 .on_toggled(context.callback(Message::EnglishFullWidthPunctuation)),
-        ),
-        field(
-            "英文模式（Caps Lock）也给候选",
-            "Tab 或方向键选词；空格、回车、标点仍原样上屏敲的字母，不选词时与直接打字一样。",
-            ToggleSwitch::new()
-                .is_on(g.english_candidates)
-                .on_toggled(context.callback(Message::EnglishCandidates)),
-        ),
-        field(
-            "但在终端和代码编辑器里不给",
-            "终端、Windows Terminal、VS Code、Cursor、JetBrains 等，那里的候选窗口会挡住应用自己的补全；名单可在配置文件里改。",
-            ToggleSwitch::new()
-                .is_on(english_off)
-                .is_enabled(g.english_candidates)
-                .on_toggled(context.callback(Message::EnglishOffInApps)),
         ),
         field(
             "输入拼音时中文候选排在英文词前面",

@@ -146,8 +146,6 @@ pub fn init(mtm: MainThreadMarker, info: &BundleInfo) -> Result<(), HostError> {
             translation: None,
             notice: None,
             preedit_mode: PreeditMode::default(),
-            english_candidates: true,
-            apps: AppsConfig::default(),
             monitor,
             cloud_test: None,
             cloud_test_monitor: CloudTestMonitor::new(mtm),

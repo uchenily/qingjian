@@ -23,12 +23,6 @@ pub struct GeneralPage {
     /// 双拼方案（第 0 项是关）。
     shuangpin: Retained<NSPopUpButton>,
 
-    /// 英文模式也给候选。
-    english: Retained<NSButton>,
-
-    /// 终端 / 编辑器里不给英文候选。
-    english_off_in_apps: Retained<NSButton>,
-
     /// 中英混输时中文候选排在英文词前。
     chinese_first: Retained<NSButton>,
 
@@ -102,30 +96,6 @@ impl GeneralPage {
             mtm,
             "仅影响标点，字母和数字保持半角；自定义短语原样输出。设置会保存。 ",
         );
-        let english = checkbox(
-            mtm,
-            "英文模式（Caps Lock）也给候选",
-            Setting::EnglishCandidates,
-            target,
-        );
-        row_checkbox(layout, &english);
-        note(
-            layout,
-            mtm,
-            "Tab 或方向键选词；空格、回车、标点仍原样上屏敲的字母，不选词时与直接打字一样。",
-        );
-        let english_off_in_apps = checkbox(
-            mtm,
-            "但在终端和代码编辑器里不给",
-            Setting::EnglishCandidatesOffInApps,
-            target,
-        );
-        row_checkbox(layout, &english_off_in_apps);
-        note(
-            layout,
-            mtm,
-            "终端、iTerm、Warp、Ghostty、VS Code、Cursor、Zed、JetBrains、Xcode 等，那里的候选窗口会挡住应用自己的补全；名单可在配置文件里改。",
-        );
         let chinese_first = checkbox(
             mtm,
             "输入拼音时中文候选排在英文词前面",
@@ -142,8 +112,6 @@ impl GeneralPage {
             learning_language,
             page_size,
             shuangpin,
-            english,
-            english_off_in_apps,
             chinese_first,
             languages: languages.to_vec(),
             punctuation,
@@ -172,13 +140,6 @@ impl GeneralPage {
                     .map_or(0, |i| i + 1)
             })),
         );
-        set_checked(&self.english, general.english_candidates);
-        set_checked(
-            &self.english_off_in_apps,
-            config.apps.has_english_candidates_off(),
-        );
-        self.english_off_in_apps
-            .setEnabled(general.english_candidates);
         set_checked(&self.chinese_first, general.chinese_first);
     }
 }

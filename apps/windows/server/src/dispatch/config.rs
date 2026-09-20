@@ -20,9 +20,6 @@ pub struct RouterConfig {
     /// 翻页键对（`[general] page_keys`，上一页 / 下一页）。
     pub page_keys: (char, char),
 
-    /// 英文模式给不给英文候选（`[general] english_candidates`）。
-    pub english_candidates: bool,
-
     /// 中文模式下不在组句时的标点转全角（`[general] full_width_punctuation`）；状态条可切。
     pub full_width: bool,
 
@@ -54,13 +51,6 @@ pub struct RouterConfig {
     pub shuangpin: Option<ShuangpinScheme>,
 }
 
-impl RouterConfig {
-    /// 全局开关开着，且应用不在 `[apps] english_candidates_off` 里；没报 exe 名按不关。
-    pub fn english_candidates_in(&self, app: Option<&str>) -> bool {
-        self.english_candidates && !app.is_some_and(|app| self.apps.english_candidates_off(app))
-    }
-}
-
 impl From<&Config> for RouterConfig {
     fn from(config: &Config) -> Self {
         Self {
@@ -69,7 +59,6 @@ impl From<&Config> for RouterConfig {
             layout: config.general.layout,
             theme: config.general.theme,
             page_keys: config.general.page_keys(),
-            english_candidates: config.general.english_candidates,
             full_width: config.general.full_width_punctuation,
             english_full_width: config.general.english_full_width_punctuation,
             zhuyin: config.general.zhuyin,

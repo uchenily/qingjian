@@ -5,11 +5,11 @@ use std::sync::{Arc, Mutex};
 
 use qingjian_core::sentence::SentenceScorer;
 use qingjian_core::{Language, ShuangpinScheme};
+use qingjian_platform::AppsConfig;
 use qingjian_platform::protocol::{
     ClientMessage, Frame, KeyEvent, KeyModifiers, KeyOutcome, PROTOCOL_VERSION, ServerMessage,
     SessionId,
 };
-use qingjian_platform::{AppsConfig, DEFAULT_ENGLISH_CANDIDATES_OFF_WINDOWS};
 use qingjian_windows_server::dispatch::{StatusEvent, StatusSink, StatusView};
 use qingjian_windows_server::{AssemblySpec, Router, RouterConfig, assembly};
 
@@ -44,10 +44,10 @@ fn router_with(config: RouterConfig) -> Router {
     router_in(config, None)
 }
 
-/// 在某个应用（宿主 exe 名）里开会话，名单用 Windows 缺省那份。
+/// 在某个应用（宿主 exe 名）里开会话。
 fn router_in_app(app: &str) -> Router {
     let config = RouterConfig {
-        apps: AppsConfig::with_english_candidates_off(DEFAULT_ENGLISH_CANDIDATES_OFF_WINDOWS),
+        apps: AppsConfig::default(),
         ..RouterConfig::default()
     };
     router_in(config, Some(app.to_owned()))
@@ -385,21 +385,15 @@ fn page_keys_follow_config() {
 }
 
 #[test]
-fn english_mode_gives_candidates_and_space_commits_raw() {
+fn english_mode_is_passthrough_no_candidates() {
+    // 英文模式彻底直通：字母不组词、不出候选，按键原样归应用。
     let mut router = router();
     let (outcome, commit, frame) = type_english(&mut router, "hel");
-    assert_eq!((outcome, commit), (KeyOutcome::Consumed, None));
-    assert_eq!(preedit(&frame), "hel", "英文模式敲的字母原样显示");
-    let texts = candidate_texts(&frame);
-    assert!(
-        texts.contains(&"hello") && texts.contains(&"help"),
-        "候选应来自英文词表：{texts:?}"
-    );
-    // 没动过高亮的空格：字母原样上屏，空格一起插（放行会让应用先插空格）。
-    let (outcome, commit, after) = press(&mut router, KeyEvent::new(0x20, Some(' '), ENGLISH));
-    assert_eq!(outcome, KeyOutcome::Consumed);
-    assert_eq!(commit.as_deref(), Some("hel "));
-    assert!(after.is_empty());
+    assert_eq!((outcome, commit), (KeyOutcome::Passthrough, None));
+    assert!(frame.is_empty(), "英文模式不该有帧：{frame:?}");
+    // 空格也直通
+    let (outcome, commit, _) = press(&mut router, KeyEvent::new(0x20, Some(' '), ENGLISH));
+    assert_eq!((outcome, commit), (KeyOutcome::Passthrough, None));
 }
 
 #[test]
@@ -419,31 +413,25 @@ fn caps_lock_types_direct_uppercase_english_regardless_of_mode() {
 }
 
 #[test]
-fn english_candidates_are_off_in_listed_apps_by_exe_name() {
-    // VS Code 在缺省名单里（exe 名不区分大小写）：英文模式字母直插、不出候选。
+fn english_mode_is_passthrough_in_any_app() {
+    // 英文模式在任何应用里都直通，不再按名单区分。
     let mut router = router_in_app("code.exe");
     let (outcome, commit, frame) = press(&mut router, letter_with('h', ENGLISH));
-    assert_eq!(
-        (outcome, commit.as_deref()),
-        (KeyOutcome::Consumed, Some("h"))
-    );
-    assert!(frame.is_empty(), "名单里的应用不该有候选：{frame:?}");
+    assert_eq!((outcome, commit), (KeyOutcome::Passthrough, None));
+    assert!(frame.is_empty(), "英文模式不该有候选：{frame:?}");
     let (outcome, commit, _) = press(&mut router, KeyEvent::new(0x20, Some(' '), ENGLISH));
     assert_eq!((outcome, commit), (KeyOutcome::Passthrough, None));
-    // 中文模式不受名单影响。
+    // 中文模式不受影响。
     let (_, _, frame) = type_letters(&mut router, "ni");
     assert!(!frame.candidates.items.is_empty(), "拼音照常出候选");
 }
 
 #[test]
-fn english_candidates_stay_on_in_other_apps() {
+fn english_mode_is_passthrough_in_other_apps() {
     let mut router = router_in_app("notepad.exe");
     let (outcome, commit, frame) = type_english(&mut router, "hel");
-    assert_eq!((outcome, commit), (KeyOutcome::Consumed, None));
-    assert!(
-        candidate_texts(&frame).contains(&"hello"),
-        "不在名单里的应用照常给英文候选：{frame:?}"
-    );
+    assert_eq!((outcome, commit), (KeyOutcome::Passthrough, None));
+    assert!(frame.is_empty(), "英文模式不该有候选：{frame:?}");
 }
 
 #[test]
@@ -456,76 +444,56 @@ fn app_list_is_looked_up_per_session() {
         app: Some("notepad.exe".to_owned()),
         protocol: PROTOCOL_VERSION,
     });
-    let (_, _, frame) = key_result(router.handle(ClientMessage::Key {
+    let (outcome, _, frame) = key_result(router.handle(ClientMessage::Key {
         session: notepad,
         event: letter_with('h', ENGLISH),
     }));
-    assert_eq!(preedit(&frame), "h", "记事本会话组词");
-    // 切回编辑器会话：残留组句清掉，字母直插。
+    assert_eq!(outcome, KeyOutcome::Passthrough, "记事本会话英文模式直通");
+    assert!(frame.is_empty(), "英文模式不该有帧");
+    // 切回编辑器会话：英文模式同样直通。
     let (outcome, commit, after) = press(&mut router, letter_with('e', ENGLISH));
-    assert_eq!(
-        (outcome, commit.as_deref()),
-        (KeyOutcome::Consumed, Some("e"))
-    );
+    assert_eq!((outcome, commit), (KeyOutcome::Passthrough, None));
     assert!(after.is_empty());
 }
 
 #[test]
-fn english_tab_and_navigated_space_pick_candidates() {
+fn english_mode_tab_and_space_are_passthrough() {
+    // 英文模式不组词、不出候选，Tab / 方向键 / 空格都直通。
     let mut router = router();
-    let (_, _, frame) = type_english(&mut router, "hel");
-    let first = frame.candidates.items[0].text.clone();
-    // Tab 选高亮的词。
+    let (_, _, _frame) = type_english(&mut router, "hel");
     let (outcome, commit, _) = press(&mut router, KeyEvent::new(0x09, None, ENGLISH));
-    assert_eq!(
-        (outcome, commit.as_deref()),
-        (KeyOutcome::Consumed, Some(first.as_str()))
-    );
-
-    // 方向键动过高亮之后，空格也选那个词，再接上空格。
-    let (_, _, frame) = type_english(&mut router, "hel");
-    let second = frame.candidates.items[1].text.clone();
+    assert_eq!((outcome, commit), (KeyOutcome::Passthrough, None));
     let (outcome, _, _) = press(&mut router, KeyEvent::new(0x28, None, ENGLISH));
-    assert_eq!(outcome, KeyOutcome::Consumed);
-    let (_, commit, after) = press(&mut router, KeyEvent::new(0x20, Some(' '), ENGLISH));
-    assert_eq!(commit, Some(format!("{second} ")));
-    assert!(after.is_empty());
+    assert_eq!(outcome, KeyOutcome::Passthrough);
+    let (outcome, commit, _) = press(&mut router, KeyEvent::new(0x20, Some(' '), ENGLISH));
+    assert_eq!((outcome, commit), (KeyOutcome::Passthrough, None));
 }
 
 #[test]
-fn english_without_candidates_is_passthrough_with_shift_case() {
-    let mut router = router_with(RouterConfig {
-        english_candidates: false,
-        ..RouterConfig::default()
-    });
-    // 字母由我们插入，大小写按 Shift；不组句。
+fn english_mode_is_passthrough_regardless_of_shift() {
+    // 英文模式彻底直通：字母不插入、不组句，大小写由应用按 Shift 自行处理。
+    let mut router = router_with(RouterConfig::default());
     let (outcome, commit, frame) = press(&mut router, letter_with('h', ENGLISH));
-    assert_eq!(
-        (outcome, commit.as_deref()),
-        (KeyOutcome::Consumed, Some("h"))
-    );
+    assert_eq!((outcome, commit), (KeyOutcome::Passthrough, None));
     assert!(frame.is_empty());
     let shifted = KeyModifiers {
         shift: true,
         ..ENGLISH
     };
-    let (_, commit, _) = press(&mut router, letter_with('H', shifted));
-    assert_eq!(commit.as_deref(), Some("H"));
+    let (outcome, commit, _) = press(&mut router, letter_with('H', shifted));
+    assert_eq!((outcome, commit), (KeyOutcome::Passthrough, None));
     // 其他键交给应用。
     let (outcome, commit, _) = press(&mut router, KeyEvent::new(0x20, Some(' '), ENGLISH));
     assert_eq!((outcome, commit), (KeyOutcome::Passthrough, None));
 }
 
 #[test]
-fn switching_to_chinese_mid_word_flushes_english_letters() {
+fn english_mode_does_not_compose_switching_to_chinese_starts_fresh() {
+    // 英文模式不组词；切回中文模式后字母从头当拼音，没有残留要 flush。
     let mut router = router();
     type_english(&mut router, "hel");
-    // 切回中文模式再敲字母：之前的英文字母原样上屏，新字母从头当拼音。
     let (outcome, commit, frame) = press(&mut router, letter('l'));
-    assert_eq!(
-        (outcome, commit.as_deref()),
-        (KeyOutcome::Consumed, Some("hel"))
-    );
+    assert_eq!((outcome, commit), (KeyOutcome::Consumed, None));
     assert_eq!(preedit(&frame), "l");
 }
 
@@ -967,10 +935,11 @@ fn bare_question_mark_restores_when_followed_by_other_keys() {
     let (outcome, commit, frame) = press(&mut router, function_key(0x08));
     assert_eq!((outcome, commit), (KeyOutcome::Consumed, None));
     assert!(preedit(&frame).is_empty());
-    // 英文模式还原成半角。
-    press(&mut router, KeyEvent::new(0xBF, Some('?'), ENGLISH));
-    let (_, commit, _) = press(&mut router, KeyEvent::new(0x20, Some(' '), ENGLISH));
-    assert_eq!(commit.as_deref(), Some("?"));
+    // 英文模式彻底直通：问号与空格都原样归应用，不组句、不转全角。
+    let (outcome, commit, _) = press(&mut router, KeyEvent::new(0xBF, Some('?'), ENGLISH));
+    assert_eq!((outcome, commit), (KeyOutcome::Passthrough, None));
+    let (outcome, commit, _) = press(&mut router, KeyEvent::new(0x20, Some(' '), ENGLISH));
+    assert_eq!((outcome, commit), (KeyOutcome::Passthrough, None));
 }
 
 #[test]
@@ -1014,29 +983,20 @@ fn punctuation_toggle_is_remembered_per_mode() {
     });
     router.handle_status_event(StatusEvent::TogglePunctuation);
     assert_eq!(press(&mut router, comma).0, KeyOutcome::Passthrough);
-    // 英文模式缺省半角；点那一格切成全角，英文模式下真转。
+    // 英文模式彻底直通：逗号不转全角，无论标点开关状态。
     router.handle(ClientMessage::ModeChanged {
         session: SESSION,
         english: true,
     });
     assert_eq!(press(&mut router, english_comma).0, KeyOutcome::Passthrough);
     router.handle_status_event(StatusEvent::TogglePunctuation);
-    assert_eq!(press(&mut router, english_comma).1, Some("，".to_owned()));
-    // 切回中文：还是中文自己记住的半角；再切回英文：还是英文记住的全角。
+    assert_eq!(press(&mut router, english_comma).0, KeyOutcome::Passthrough);
+    // 切回中文：还是中文自己记住的半角。
     router.handle(ClientMessage::ModeChanged {
         session: SESSION,
         english: false,
     });
     assert_eq!(press(&mut router, comma).0, KeyOutcome::Passthrough);
-    router.handle(ClientMessage::ModeChanged {
-        session: SESSION,
-        english: true,
-    });
-    assert_eq!(press(&mut router, english_comma).1, Some("，".to_owned()));
-    // 英文候选组词中敲标点：先把字母原样上屏，标点也按英文那份转。
-    type_english(&mut router, "hello");
-    let (_, commit, _) = press(&mut router, english_comma);
-    assert_eq!(commit.as_deref(), Some("hello，"));
 }
 
 /// 假打分器：偏爱某个文本，其余都给低分（与 Core 的重打分测试同款）。

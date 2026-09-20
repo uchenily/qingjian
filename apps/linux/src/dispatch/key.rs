@@ -92,7 +92,6 @@ pub fn apply(dispatch: &mut Dispatch, engine: &mut Engine, input: &KeyInput) -> 
     // MVP 阶段先默认中文模式：不靠 Caps Lock 切中英（fcitx5 的 KeyState::CapsLock 行为与 macOS 不同，
     // 后续接 fcitx5 的中英切换机制或配置开关）。字母一律进拼音。
     let english = false;
-    let english_candidates = false;
     let question = composing && engine.question_mode();
     // 英文模式下问字：Caps 让字母以大写送来，按小写收进问题
     let c = if question && english && c.is_ascii_uppercase() {
@@ -113,18 +112,14 @@ pub fn apply(dispatch: &mut Dispatch, engine: &mut Engine, input: &KeyInput) -> 
         return with_prefix(Some(prefix), outcome, c);
     }
 
-    // 英文组词中候选被关掉（Caps 灭 / 切应用）：敲过的字母先原样上屏
-    let flushed = (composing && !english_candidates && engine.english_mode())
-        .then(|| engine.take_raw())
-        .filter(|s| !s.is_empty());
-    engine.set_english_mode(english_candidates && !question);
+    engine.set_english_mode(false);
 
     let effect = if english && !question {
-        apply_english(dispatch, engine, c, english_candidates, shift)
+        apply_english(dispatch, engine, c, shift)
     } else {
         apply_chinese(dispatch, engine, c, shift)
     };
-    with_prefix(flushed, effect, c)
+    with_prefix(None, effect, c)
 }
 
 /// emacs 风格编辑键（仅组句中调用）。返回 `Some` 表示已处理，`None` 表示不是 emacs 键、交给后续逻辑。
@@ -330,52 +325,23 @@ fn apply_punctuation(engine: &mut Engine, c: char, _shift: bool) -> KeyOutcome {
 }
 
 /// 英文模式。开着候选：字母进缓冲区，空格 / 标点先把字母原样上屏；关着候选：字母由我们插入。
-fn apply_english(
-    dispatch: &mut Dispatch,
-    engine: &mut Engine,
-    c: char,
-    candidates: bool,
-    shift: bool,
-) -> KeyOutcome {
+fn apply_english(dispatch: &mut Dispatch, engine: &mut Engine, c: char, shift: bool) -> KeyOutcome {
     let composing = !engine.composition().is_empty();
-    if !candidates {
-        let raw = composing
-            .then(|| engine.take_raw())
-            .filter(|s| !s.is_empty());
-        let effect = if c.is_ascii_alphabetic() {
-            let letter = if shift {
-                c.to_ascii_uppercase()
-            } else {
-                c.to_ascii_lowercase()
-            };
-            engine.note_passthrough(letter);
-            KeyOutcome::committed(letter.to_string(), Frame::empty())
-        } else {
-            apply_punctuation(engine, c, shift)
-        };
-        return with_prefix(raw, effect, c);
-    }
-    if c.is_ascii_alphabetic()
-        || (composing && (c.is_ascii_digit() || matches!(c, '_' | '\'' | '-')))
-    {
+    let raw = composing
+        .then(|| engine.take_raw())
+        .filter(|s| !s.is_empty());
+    let effect = if c.is_ascii_alphabetic() {
         let letter = if shift {
             c.to_ascii_uppercase()
         } else {
             c.to_ascii_lowercase()
         };
-        engine.push(letter);
-        dispatch.refresh(engine);
-        return KeyOutcome::consumed(dispatch.current_frame(engine));
-    }
-    let committed = composing.then(|| {
-        if c == ' ' && dispatch.session().navigated() {
-            commit_highlighted(dispatch, engine)
-        } else {
-            engine.take_raw()
-        }
-    });
-    let effect = apply_punctuation(engine, c, shift);
-    with_prefix(committed, effect, c)
+        engine.note_passthrough(letter);
+        KeyOutcome::committed(letter.to_string(), Frame::empty())
+    } else {
+        apply_punctuation(engine, c, shift)
+    };
+    with_prefix(raw, effect, c)
 }
 
 /// 组句中的可打印键：数字选当前页第 N 个，翻页键翻页，空格上屏高亮，其余进缓冲区或英文直输段。

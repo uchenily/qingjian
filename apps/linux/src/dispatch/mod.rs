@@ -9,9 +9,7 @@ mod result;
 use std::time::{Duration, Instant};
 
 use qingjian_core::{Engine, QUESTION_PREFIX, shortcut};
-use qingjian_platform::{
-    AppsConfig, Config, DEFAULT_PAGE_KEYS, LayoutMode, Modifiers, PreeditMode, ThemeMode,
-};
+use qingjian_platform::{Config, DEFAULT_PAGE_KEYS, LayoutMode, Modifiers, PreeditMode, ThemeMode};
 
 pub use key::KeyInput;
 pub use result::{KeyOutcome, KeyResult};
@@ -35,12 +33,6 @@ pub struct Dispatch {
     /// 组句中的拼音显示位置（行内 / 窗口 / 两处）。MVP 阶段统一画在候选窗，保留字段供后续按配置分。
     #[allow(dead_code)]
     preedit_mode: PreeditMode,
-    /// 英文模式要不要给候选（终端 / 编辑器类应用关掉）。MVP 暂不用，接中英切换后启用。
-    #[allow(dead_code)]
-    english_candidates: bool,
-    /// 按应用关掉英文候选的配置。MVP 暂不用。
-    #[allow(dead_code)]
-    apps: AppsConfig,
     /// 整句补全（preedit 右侧、Tab 上屏）；缓冲变化时清空。
     sentence: Option<String>,
     /// 删候选后的屏幕提示，随下一帧下发、下一次按键清。
@@ -60,8 +52,6 @@ impl Dispatch {
             layout: config.general.layout,
             theme: config.general.theme,
             preedit_mode: config.general.preedit,
-            english_candidates: config.general.english_candidates,
-            apps: config.apps.clone(),
             sentence: None,
             notice: None,
             last_flush: Instant::now(),
@@ -233,17 +223,6 @@ impl Dispatch {
             notice: self.notice.clone(),
         };
         builder.to_frame()
-    }
-
-    /// 当前应用里英文模式要不要给候选。
-    #[allow(dead_code)]
-    pub(crate) fn english_candidates_in(&self) -> bool {
-        self.english_candidates
-            && self
-                .app
-                .as_deref()
-                .map(|app| !self.apps.english_candidates_off(app))
-                .unwrap_or(true)
     }
 
     pub(crate) fn page_keys(&self) -> (char, char) {

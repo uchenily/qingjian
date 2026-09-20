@@ -28,8 +28,6 @@ impl Host {
         self.cloud_slots = config.predict.slots;
         self.page_keys = config.general.page_keys();
         self.preedit_mode = config.general.preedit;
-        self.english_candidates = config.general.english_candidates;
-        self.apps = config.apps.clone();
         self.window.set_theme(config.general.theme);
         self.window.set_layout(config.general.layout);
         self.apply_learning_language(&config.general.learning_language);
