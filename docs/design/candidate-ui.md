@@ -341,7 +341,7 @@ Core `correction` 模块只产生候选纠正，挑选与学习在 Engine 里。
 `corrected`、`text`、`source`（word / cloud / sentence / english / shortcut / emoji / raw / translation / cloud_sentence）、`index`（选的是查询时候选列表里第几个，
 晚到的云端词与原样上屏为空）、`top`（查询时前 5 个候选）、`scheme`、`english`、`t`（本机时间）；退格撤销另记一行 `retract`，指回被撤销那条的 `id`。
 只有敲的键与上屏的文字，不含应用里的上下文；只写本机，「高级」页可关可清，「关于」页隐私说明有写。用途：离线回放算首选命中率做排序 / 整句的回归评测，
-以及个人模型（Phase 7）的训练对。回放工具是 CLI `--replay`（见 CLAUDE.md），首批 150 条：词首选 75%、前五 95%，整句首选 86%。Core `Engine` 在 `query` 时留摘要（`QuerySnapshot`）、上屏时凑成 `InputLogEntry` 交给 `InputLogger`（学习 crate 的 `InputLog` 落盘，攒 20 条刷一次，停用输入法时也刷）。
+以及个人模型（Phase 7）的训练对。回放工具是 CLI `--replay`（见 AGENTS.md），首批 150 条：词首选 75%、前五 95%，整句首选 86%。Core `Engine` 在 `query` 时留摘要（`QuerySnapshot`）、上屏时凑成 `InputLogEntry` 交给 `InputLogger`（学习 crate 的 `InputLog` 落盘，攒 20 条刷一次，停用输入法时也刷）。
 
 选错了词也有补救：上屏后马上把它整个退格删掉、重打同一段拼音换选别的词，上一次记的学习（选择次数、输入串选择、词转移）会退回去，
 不用担心一次误按空格把错词教给输入法。

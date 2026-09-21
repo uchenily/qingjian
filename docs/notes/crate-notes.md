@@ -1,6 +1,6 @@
 # 各 crate 的实现要点
 
-CLAUDE.md 只保留目录地图与规则，每个 crate / app / tool 的实现细节收在这里：入口类型、数据文件、常数、生成命令。
+AGENTS.md 只保留目录地图与规则，每个 crate / app / tool 的实现细节收在这里：入口类型、数据文件、常数、生成命令。
 改了实现要同步改这里；与代码冲突时以代码为准。
 
 ## crates/qingjian-dictionary

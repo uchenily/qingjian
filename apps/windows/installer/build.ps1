@@ -8,7 +8,7 @@
       3) 找 ISCC.exe（PATH 或常见安装位置）；
       4) iscc /DAppVersion=<版本> 编脚本，成品在 target\installer\Qingjian-<版本>-Setup.exe。
     随包数据（.qj / .tsv）直接由 .iss 从仓库 data\generated 与 assets 里取，不另建暂存目录；
-    确保打包前 data\generated 里的 .qj 是最新的（bundle 流程见仓库 CLAUDE.md）。
+    确保打包前 data\generated 里的 .qj 是最新的（bundle 流程见仓库 AGENTS.md）。
     没有代码签名证书时（CI 内测包）先设 $env:QINGJIAN_UIACCESS = '0' 再跑：没签名的 exe 带 uiAccess 起不来。
 .PARAMETER SkipBuild
     跳过 cargo build（数据或 .iss 改了、二进制没变时重编安装包用）。
