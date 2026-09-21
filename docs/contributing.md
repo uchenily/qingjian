@@ -58,7 +58,7 @@
 
 ## 提交前检查
 
-- 钩子：`.githooks/pre-commit`（禁装饰性分隔注释 + fmt + clippy），`.githooks/pre-push`（全 workspace 测试）；`git config core.hooksPath .githooks` 启用一次。
+- 钩子：`.githooks/pre-commit`（禁装饰性分隔注释 + clippy），`.githooks/pre-push`（全 workspace 测试）；`git config core.hooksPath .githooks` 启用一次。
 - 排序 / 整句 / 纠错的改动先跑 `apps/cli` 再合。
 
 ## CI 与发版

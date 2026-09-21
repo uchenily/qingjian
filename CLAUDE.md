@@ -36,7 +36,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 cargo build                                   # 整个 workspace
 cargo test                                    # 全部测试；-p <crate> 单个，加测试名过滤
 cargo clippy --all-targets -- -D warnings
-cargo fmt --all
 cargo run -p qingjian-cli -- <拼音>...          # Core 的主要验证方式；--replay / --eval-text 见 crate-notes
 apps/macos/scripts/bundle.sh --install        # mac 壳装到 ~/Library/Input Methods/（IMK 不能 cargo run 验证）
 ```
