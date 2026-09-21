@@ -115,6 +115,16 @@ impl TextService_Impl {
         }
         let modifiers = event.modifiers;
         if modifiers.has_command_key() {
+            // 组句中的 emacs 编辑键（Ctrl-A/E/W/U、Alt-F/B，不带 Shift/Win）送 Server 处理；
+            // 修饰键 + 数字送 Server（译词 / 删候选）；其余归应用。
+            if self.shared.composing()
+                && !modifiers.win
+                && !modifiers.shift
+                && (modifiers.ctrl ^ modifiers.alt)
+                && is_letter(event.virtual_key)
+            {
+                return true;
+            }
             return self.shared.composing() && digit_key(event.virtual_key);
         }
         let vk = event.virtual_key;
