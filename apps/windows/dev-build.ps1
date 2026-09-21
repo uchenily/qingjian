@@ -15,8 +15,9 @@
     代理：脚本不写死，沿用调用方的 $env:HTTPS_PROXY / $env:HTTP_PROXY（下载上游数据时 curl 自动读）。
     装完在系统「语言 / 输入法」里应能看到「青简」，切到它，在任意输入框敲字；
     DLL 侧日志在 %LOCALAPPDATA%\Qingjian\tsf.<日期>.log（按天，留 7 天）。
-    DLL 被进程加载后文件锁着，重新构建会失败（os error 5）。脚本会精确列出占用 DLL 的进程 PID，
-    供你手动关闭；系统进程（explorer 等）需注销 / 重登释放，脚本不会乱杀。
+    DLL 被进程加载后文件锁着，但 Windows 允许重命名正在运行的映像文件：构建前把旧 DLL
+    重命名走（.prev 后缀），cargo 链接新文件到原路径，旧文件留待进程退出后清理。不再需要
+    每次手动关浏览器 / 终端 / 注销重登。
 .PARAMETER SyncUpstream
     从上游 data Release 重新下载并解包产品数据（data\generated、data\model）。默认关闭。
 .PARAMETER Release
@@ -70,10 +71,6 @@ $RequiredGenerated = @(
 $Profile = if ($Release) { 'release' } else { 'debug' }
 $TsfDll   = Join-Path $Repo "target\$Profile\qingjian_tsf.dll"
 $ServerExe = Join-Path $Repo "target\$Profile\qingjian-server.exe"
-
-# 系统进程：加载了 DLL 也不能杀（靠注销 / 重登释放）。
-$SystemProcesses = @('explorer', 'SearchHost', 'StartMenuExperienceHost', 'ShellExperienceHost',
-                     'RuntimeBroker', 'sihost', 'ctfmon', 'textinputhost')
 
 function Write-Step([string]$msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
 function Write-Ok([string]$msg)   { Write-Host "    $msg" -ForegroundColor Green }
@@ -192,24 +189,30 @@ if (-not $NoUninstall -and (Test-Path $Uninstaller)) {
     Write-Warn '检测到正式安装版但跳过卸载（-NoUninstall）：系统进程可能加载正式版 DLL，开发版改动看不到'
 }
 
-# 3) 构建 DLL / Server。构建前检测 DLL 是否被进程占用（锁着会 os error 5）。
+# 3) 构建 DLL / Server。构建前把被进程加载的旧 DLL 重命名走（Windows 允许重命名正在运行的
+#    映像文件，进程内存里已映射的代码不受影响）：cargo 链接新文件到原路径，不再因文件锁失败。
+#    旧 .prev 文件能删就删，删不掉（仍有进程持有旧句柄）留着下次清理。
 if (-not $NoBuild) {
     Write-Step "cargo build $Profile（DLL + Server）"
-    # DLL 被进程加载时文件锁着，cargo 无法覆盖。精确列出占用者供用户处理。
+    # 清理上轮留下的 .prev（能删的删，删不掉的忽略）。
+    if (Test-Path "$TsfDll.prev") {
+        Remove-Item "$TsfDll.prev" -Force -ErrorAction SilentlyContinue
+    }
+    # 旧 DLL 被进程加载时重命名走，空出原路径给 cargo 链接新文件。
     if (Test-Path $TsfDll) {
-        $holders = Get-DllHolders | Where-Object { $_.DLL -eq $TsfDll }
-        if ($holders) {
-            Write-Warn "目标 DLL 被以下进程占用，构建会失败："
-            $holders | Format-Table -AutoSize | Out-Host
-            $sys = $holders | Where-Object { $SystemProcesses -contains $_.Name }
-            $user = $holders | Where-Object { $SystemProcesses -notcontains $_.Name }
-            if ($user) {
-                Write-Warn "请关闭这些用户进程后重试：$($user.Name -join ', ')"
+        try {
+            Rename-Item $TsfDll "$TsfDll.prev" -Force -ErrorAction Stop
+            if (Test-Path "$TsfDll.prev") {
+                Write-Ok '旧 DLL 已重命名走（进程仍持有旧映像，新构建写到原路径）'
             }
-            if ($sys) {
-                Write-Warn "系统进程（$($sys.Name -join ', ')）需注销 / 重登释放，脚本不会杀它们"
+        } catch {
+            # 重命名也失败（罕见，可能权限）：回退到旧的检测 + 报错流程。
+            $holders = Get-DllHolders | Where-Object { $_.DLL -eq $TsfDll }
+            if ($holders) {
+                Write-Warn "DLL 被占用且无法重命名，构建会失败："
+                $holders | Format-Table -AutoSize | Out-Host
+                throw 'DLL 被占用且无法重命名；关闭占用进程或注销重登后重试'
             }
-            throw 'DLL 被占用，无法构建；关闭占用进程或注销重登后重试'
         }
     }
     $env:QINGJIAN_UIACCESS = '0'
