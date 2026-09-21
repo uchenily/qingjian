@@ -104,10 +104,16 @@ impl Engine {
             Some(EnglishTail {
                 head_len,
                 word_end: scope.len(),
-                word: word.to_owned(),
+                // 用户输入全小写时用词表原形（`id` → ID、`github` → GitHub）；
+                // 用户输入含大写时尊重用户输入（`Rust` → Rust）。
+                word: if tail.bytes().all(|b| b.is_ascii_lowercase()) {
+                    word.to_owned()
+                } else {
+                    tail.to_owned()
+                },
                 // 双拼前缀已经按音节边界解码，尾部是否也能解码不应阻止英文尾段。
                 competes: !shuangpin && full.is_some(),
-                log_prob: english_log_prob(words.frequency(tail)),
+                log_prob: english_log_prob(words.frequency(&tail_lower)),
             })
         })
     }
@@ -165,11 +171,17 @@ impl Engine {
                 return Some(EnglishTail {
                     head_len: start,
                     word_end: end,
-                    word: word.to_owned(),
+                    // 用户输入全小写时用词表原形（`id` → ID、`github` → GitHub）；
+                    // 用户输入含大写时尊重用户输入（`Rust` → Rust）。
+                    word: if typed.bytes().all(|b| b.is_ascii_lowercase()) {
+                        word.to_owned()
+                    } else {
+                        typed.to_owned()
+                    },
                     // 尾段也能解码成完整双拼时（`meds` → me+ds → 么东，与英文 meds 竞争），
                     // 要和拼音整句比分，不能直接采用英文读法。
                     competes: self.decode(typed).is_some_and(|d| d.is_complete()),
-                    log_prob: english_log_prob(words.frequency(typed)),
+                    log_prob: english_log_prob(words.frequency(&typed_lower)),
                 });
             }
         }
