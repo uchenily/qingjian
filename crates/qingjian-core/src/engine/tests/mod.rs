@@ -370,3 +370,33 @@ fn texts_of(engine: &Engine) -> Vec<String> {
         .map(|c| c.text)
         .collect()
 }
+/// 模糊音 in_ing 下整句候选的音节用变体（ying→yin），提交后缓冲区必须清空。
+/// 回归：align 对 "ying"/"yin" 只吃 syllable.len()=3 剩下 g，后续音节全消不掉，
+/// 反复按空格反复输出。
+#[test]
+fn fuzzy_in_ing_sentence_commit_clears_buffer() {
+    let dict =
+        Dictionary::parse("隐身\tyin shen\t9000\n获得\thuo de\t8000\n效果\txiao guo\t7000\n")
+            .unwrap();
+    let mut engine = Engine::new(dict);
+    engine.set_shuangpin(Some(Scheme::Xiaohe));
+    let mut fuzzy = FuzzyRules::default();
+    fuzzy.in_ing = true;
+    engine.set_fuzzy(fuzzy);
+    // 小鹤双拼：hodeykufxngo -> huo de ying shen xiao guo
+    engine.set_input("hodeykufxngo");
+    let candidate = engine
+        .query()
+        .unwrap()
+        .candidates
+        .items
+        .first()
+        .expect("应有候选")
+        .clone();
+    assert_eq!(engine.commit(&candidate), "获得隐身效果");
+    assert!(
+        engine.composition().is_empty(),
+        "提交后缓冲区应清空，实际剩: {:?}",
+        engine.composition().text()
+    );
+}

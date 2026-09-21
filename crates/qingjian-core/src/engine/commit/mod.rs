@@ -464,16 +464,28 @@ impl Engine {
             }
             let rest = &input[pos..];
             let rest = &rest[..rest.find('\'').unwrap_or(rest.len())];
-            let canonical_match = rest.get(..syllable.len()).is_some_and(|typed| {
-                qingjian_dictionary::canonical_syllable(typed)
-                    == qingjian_dictionary::canonical_syllable(syllable)
-            });
+            let canonical_match = rest.len() >= syllable.len() && {
+                // rest 整段是一个规范音节且与候选音节规范相同（lue/ve 这类变体）。
+                // 不能只比 rest 前 syllable.len() 个字符：ying / yin 前 3 字符都是 yin 会误匹配。
+                let r = qingjian_dictionary::canonical_syllable(rest);
+                r == qingjian_dictionary::canonical_syllable(syllable)
+            };
             if canonical_match {
-                pos += syllable.len();
+                pos += rest.len();
                 continue;
             }
             if rest.starts_with(syllable.as_str()) {
-                pos += syllable.len();
+                // 输入音节以候选音节开头：
+                // - 模糊变体（如输入 ying / 候选 yin，rest 整段是单音节且是 syllable 的模糊变体）：
+                //   吃掉整个 rest，不能只吃 syllable.len()——否则 ying 剩下 g，后续音节对不上、
+                //   整句提交后缓冲区消不干净。
+                // - 普通前缀（如 rest="kaifazhe"、syllable="kai"，全拼无 ' 分隔 rest 是多音节串）：
+                //   只吃 syllable.len()，剩下的是后续音节。
+                if self.fuzzy.is_variant(rest, syllable) {
+                    pos += rest.len();
+                } else {
+                    pos += syllable.len();
+                }
                 continue;
             }
             if !rest.is_empty() && syllable.starts_with(rest) {
