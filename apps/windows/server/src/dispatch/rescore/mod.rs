@@ -148,6 +148,10 @@ impl Router {
         self.attach_loaded_model();
         self.advance_rescoring();
         self.poll_config_reload();
+        // 学习数据落盘放这里（不在按键路径）：慢盘 / 杀软扫描 sync_all 不会卡住客户端按键响应。
+        if self.last_flush.elapsed() >= super::LEARNING_FLUSH_INTERVAL {
+            self.flush_learning();
+        }
     }
 
     /// 防抖到点就发请求；在等结果就收一次，收到了重查并重画当前页。

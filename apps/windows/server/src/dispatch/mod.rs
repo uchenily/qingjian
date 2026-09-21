@@ -153,13 +153,10 @@ impl Router {
         self.status = sink;
     }
 
-    /// 处理一条消息；`None` 表示不用回话。到点顺带把学习数据落盘。
+    /// 处理一条消息；`None` 表示不用回话。学习数据落盘不在按键路径上做（见 [`Self::tick`]），
+    /// 免得慢盘 / 杀软扫描 `sync_all` 卡住工人线程、让所有客户端等不到按键响应。
     pub fn handle(&mut self, message: ClientMessage) -> Option<ServerMessage> {
-        let response = self.dispatch(message);
-        if self.last_flush.elapsed() >= LEARNING_FLUSH_INTERVAL {
-            self.flush_learning();
-        }
-        response
+        self.dispatch(message)
     }
 
     pub fn flush_learning(&mut self) {
