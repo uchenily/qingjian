@@ -374,14 +374,13 @@ fn page_keys_follow_config() {
     assert_eq!(frame.page, 1, "`.` 应翻到下一页");
     let (_, _, frame) = key(&mut router, ',');
     assert_eq!(frame.page, 0, "`,` 应翻回上一页");
-    // 缺省的 `]` 此时不再翻页，进直输段。
-    let (_, _, frame) = key(&mut router, ']');
-    assert_eq!(frame.page, 0);
-    assert!(
-        preedit(&frame).contains(']'),
-        "`]` 应进直输段：{}",
-        preedit(&frame)
+    // 缺省的 `]` 此时不再翻页；组句中中文候选后敲标点先提交候选再转全角。
+    let (outcome, commit, frame) = key(&mut router, ']');
+    assert_eq!(
+        (outcome, commit.as_deref()),
+        (KeyOutcome::Consumed, Some("你】"))
     );
+    assert!(frame.is_empty(), "组句已提交");
 }
 
 #[test]
@@ -498,23 +497,52 @@ fn english_mode_does_not_compose_switching_to_chinese_starts_fresh() {
 }
 
 #[test]
-fn shift_uppercase_while_composing_commits_raw_first() {
+fn shift_uppercase_while_composing_joins_buffer() {
     let mut router = router();
     type_letters(&mut router, "ni");
-    // 中文模式按住 Shift 打大写字母：拼音原样上屏，字母跟在后面一起插。
+    // 中文模式组句中按住 Shift 打大写字母：进缓冲区参与中英混输，不提前提交拼音。
     let shifted = KeyModifiers {
         shift: true,
         ..KeyModifiers::default()
     };
     let (outcome, commit, frame) = press(&mut router, letter_with('A', shifted));
-    assert_eq!(
-        (outcome, commit.as_deref()),
-        (KeyOutcome::Consumed, Some("niA"))
-    );
-    assert!(frame.is_empty());
+    assert_eq!((outcome, commit.as_deref()), (KeyOutcome::Consumed, None));
+    assert!(!frame.is_empty());
     // 没在组句时大写字母交给应用。
+    press(&mut router, function_key(0x1B));
     let (outcome, commit, _) = press(&mut router, letter_with('A', shifted));
     assert_eq!((outcome, commit), (KeyOutcome::Passthrough, None));
+}
+
+#[test]
+fn emacs_editing_keys_work_while_composing() {
+    let mut router = router();
+    type_letters(&mut router, "nihao");
+    // Ctrl+W 删掉光标前一个音节：ni'hao → ni
+    let (outcome, commit, frame) = press(&mut router, letter_with('w', CTRL));
+    assert_eq!((outcome, commit.as_deref()), (KeyOutcome::Consumed, None));
+    assert_eq!(preedit(&frame), "ni");
+    // Ctrl+U 删到行首：ni → 空
+    let (outcome, commit, frame) = press(&mut router, letter_with('u', CTRL));
+    assert_eq!((outcome, commit.as_deref()), (KeyOutcome::Consumed, None));
+    assert_eq!(preedit(&frame), "");
+    // 没在组句时 Ctrl+W 交给应用
+    let (outcome, commit, _) = press(&mut router, letter_with('w', CTRL));
+    assert_eq!((outcome, commit), (KeyOutcome::Passthrough, None));
+}
+
+#[test]
+fn punctuation_after_chinese_candidate_commits_with_full_width() {
+    let mut router = router();
+    type_letters(&mut router, "nihao");
+    // 组句中中文候选后敲逗号：先提交候选再转全角逗号
+    let comma = KeyEvent::new(0xBC, Some(','), Default::default());
+    let (outcome, commit, frame) = press(&mut router, comma);
+    assert_eq!(
+        (outcome, commit.as_deref()),
+        (KeyOutcome::Consumed, Some("你好，"))
+    );
+    assert!(frame.is_empty(), "组句已提交");
 }
 
 #[test]
@@ -566,8 +594,14 @@ fn unconfigured_modifier_digit_is_not_a_selection() {
     });
     type_letters(&mut router, "nihao");
     let (outcome, commit, frame) = press(&mut router, digit_with(4, SHIFT));
-    assert_eq!((outcome, commit), (KeyOutcome::Consumed, None));
-    assert!(preedit(&frame).contains('$'), "{}", preedit(&frame));
+    // `$` 是标点：组句中中文候选后敲标点先提交候选再转全角，不选词。
+    assert_eq!(
+        (outcome, commit.as_deref()),
+        (KeyOutcome::Consumed, Some("你好￥"))
+    );
+    assert!(frame.is_empty(), "组句已提交");
+    // 重新组句测 Win+1
+    type_letters(&mut router, "nihao");
     let (outcome, commit, _) = press(&mut router, digit_with(1, WIN));
     assert_eq!((outcome, commit), (KeyOutcome::Passthrough, None));
 }
@@ -690,11 +724,14 @@ fn chinese_punctuation_is_full_width_only_when_not_composing() {
     assert_eq!(press(&mut router, period).0, KeyOutcome::Passthrough);
     assert_eq!(press(&mut router, period).1, Some("。".to_owned()));
 
-    // 组句中：标点进英文直输段，不转。
+    // 组句中中文候选后敲标点：先提交候选，再转全角标点。
     type_letters(&mut router, "ni");
     let (outcome, commit, frame) = press(&mut router, comma);
-    assert_eq!((outcome, commit), (KeyOutcome::Consumed, None));
-    assert!(!frame.is_empty(), "组句应还在");
+    assert_eq!(
+        (outcome, commit.as_deref()),
+        (KeyOutcome::Consumed, Some("你，"))
+    );
+    assert!(frame.is_empty(), "组句已提交");
 
     // 状态条上关掉全角：原样交给应用。
     router.handle(ClientMessage::Commit { session: SESSION });

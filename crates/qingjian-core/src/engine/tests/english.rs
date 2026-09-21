@@ -78,6 +78,27 @@ fn shuangpin_english_word_can_appear_before_more_chinese() {
     assert!(engine.composition().is_empty());
 }
 
+#[test]
+fn uppercase_english_tail_joins_the_sentence() {
+    // `woxlxtRust` / `woxiangxueRust`：大写字母开头的英文词接在拼音后，不触发「临时打英文」提交。
+    let dict_src = "我\two\t9000\n想\txiang\t9000\n学\txue\t9000\n";
+    let words_src = "Rust\n";
+    // 全拼
+    let mut engine = Engine::new(Dictionary::parse(dict_src).unwrap())
+        .with_english(WordList::parse(words_src).unwrap());
+    engine.set_input("woxiangxueRust");
+    let query = engine.query().unwrap();
+    assert_eq!(query.candidates.items[0].text, "我想学Rust");
+    assert_eq!(query.candidates.items[0].kind, CandidateKind::Sentence);
+    // 双拼
+    let mut engine = Engine::new(Dictionary::parse(dict_src).unwrap())
+        .with_english(WordList::parse(words_src).unwrap());
+    engine.set_shuangpin(Some(Scheme::Xiaohe));
+    engine.set_input("woxlxtRust");
+    let query = engine.query().unwrap();
+    assert_eq!(query.candidates.items[0].text, "我想学Rust");
+    assert_eq!(query.candidates.items[0].kind, CandidateKind::Sentence);
+}
 /// 双拼下尾段既能解码成拼音又是英文词时（`meds` → me+ds → 么东，与英文 meds 竞争），
 /// 拼音整句应胜出，不能把英文词原样塞进中文（`veuiufmedsxi` → "这是什么东西"，不是 "这是神meds系"）。
 #[test]

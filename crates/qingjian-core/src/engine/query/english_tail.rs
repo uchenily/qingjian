@@ -44,7 +44,7 @@ impl Engine {
     /// 切出来只说明「可以这么读」，与拼音读法谁排前面看 `competes` 与比分。
     pub(crate) fn split_english_tail(&self, scope: &str) -> Option<EnglishTail> {
         if scope.len() < MIN_ENGLISH_TAIL_HEAD_LETTERS + MIN_ENGLISH_TAIL_LETTERS
-            || !scope.bytes().all(|b| b.is_ascii_lowercase())
+            || !scope.bytes().all(|b| b.is_ascii_alphabetic())
         {
             return None;
         }
@@ -80,14 +80,17 @@ impl Engine {
         (MIN_ENGLISH_TAIL_LETTERS..=longest).rev().find_map(|len| {
             let head_len = scope.len() - len;
             let tail = &scope[head_len..];
-            let words = lists.iter().find(|words| words.get(tail).is_some())?;
-            let word = words.get(tail)?;
+            let tail_lower = tail.to_ascii_lowercase();
+            let words = lists
+                .iter()
+                .find(|words| words.get(&tail_lower).is_some())?;
+            let word = words.get(&tail_lower)?;
             let acronym = word.bytes().any(|b| b.is_ascii_uppercase());
-            let known = personal.is_some_and(|words| words.get(tail).is_some());
+            let known = personal.is_some_and(|words| words.get(&tail_lower).is_some());
             if len == MIN_ENGLISH_TAIL_LETTERS && !acronym && !known {
                 return None;
             }
-            if parser::is_fully_segmentable(tail) && len < MIN_PINYIN_LIKE_TAIL_LETTERS {
+            if parser::is_fully_segmentable(&tail_lower) && len < MIN_PINYIN_LIKE_TAIL_LETTERS {
                 return None;
             }
             if shuangpin {
@@ -137,16 +140,19 @@ impl Engine {
                     continue;
                 }
                 let typed = &scope[start..end];
-                let Some(words) = lists.iter().find(|words| words.get(typed).is_some()) else {
+                let typed_lower = typed.to_ascii_lowercase();
+                let Some(words) = lists.iter().find(|words| words.get(&typed_lower).is_some())
+                else {
                     continue;
                 };
-                let word = words.get(typed)?;
+                let word = words.get(&typed_lower)?;
                 let acronym = word.bytes().any(|b| b.is_ascii_uppercase());
-                let known = personal.is_some_and(|known| known.get(typed).is_some());
+                let known = personal.is_some_and(|known| known.get(&typed_lower).is_some());
                 if end - start < min_word && !acronym && !known {
                     continue;
                 }
-                if parser::is_fully_segmentable(typed) && end - start < MIN_PINYIN_LIKE_TAIL_LETTERS
+                if parser::is_fully_segmentable(&typed_lower)
+                    && end - start < MIN_PINYIN_LIKE_TAIL_LETTERS
                 {
                     continue;
                 }

@@ -296,12 +296,15 @@ fn apply_function_key(
 /// 中文模式：小写字母进拼音；Shift 大写字母是临时打英文；其他字符走全角标点或进缓冲区。
 fn apply_chinese(dispatch: &mut Dispatch, engine: &mut Engine, c: char, shift: bool) -> KeyOutcome {
     if c.is_ascii_uppercase() {
-        // Shift 大写字母：临时打英文，先把拼音原样上屏
-        let raw = (!engine.composition().is_empty())
-            .then(|| engine.take_raw())
-            .filter(|s| !s.is_empty());
+        if !engine.composition().is_empty() {
+            // 组句中：大写字母进缓冲区，交给 engine 做中英混输切分
+            engine.push(c);
+            dispatch.refresh(engine);
+            return KeyOutcome::consumed(dispatch.current_frame(engine));
+        }
+        // 没在组句：临时打英文，直接放行
         engine.note_passthrough(c);
-        return with_prefix(raw, KeyOutcome::passthrough(), c);
+        return KeyOutcome::passthrough();
     }
     if c.is_ascii_lowercase() {
         engine.push(c);

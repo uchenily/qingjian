@@ -1,6 +1,6 @@
 //! 按键怎么作用到 Engine / 高亮上。分流规则与 macOS 壳的 `handle_text` / `handle_command` 对齐。
 
-use qingjian_core::{QUESTION_PREFIX, shortcut};
+use qingjian_core::{CandidateKind, QUESTION_PREFIX, shortcut};
 use qingjian_platform::protocol::KeyEvent;
 
 use super::{Effect, codes, with_prefix};
@@ -14,6 +14,13 @@ impl Router {
             && !self.engine.expression_mode()
             && let Some(digit) = codes::digit_key(event.virtual_key)
             && let Some(effect) = self.apply_digit_shortcut(digit, event.modifiers.chord())
+        {
+            return effect;
+        }
+        // emacs 风格编辑键（仅组句中）：Ctrl-A/E 行首尾、Ctrl-W 删前一个音节、
+        // Ctrl-U 删到行首、Alt-F/B 按音节跳光标。不组句时交给应用。
+        if self.composing()
+            && let Some(effect) = self.apply_emacs(event)
         {
             return effect;
         }
@@ -77,6 +84,60 @@ impl Router {
         }
         self.engine.note_passthrough(QUESTION_PREFIX);
         QUESTION_PREFIX.to_string()
+    }
+
+    /// emacs 风格编辑键（仅组句中调用）。返回 `Some` 表示已处理，`None` 表示不是 emacs 键、交给后续逻辑。
+    ///
+    /// - Ctrl-A：光标到行首
+    /// - Ctrl-E：光标到行尾
+    /// - Ctrl-W：删掉光标前一个音节
+    /// - Ctrl-U：删掉光标前的全部拼音
+    /// - Alt-F：光标右跳一个音节
+    /// - Alt-B：光标左跳一个音节
+    ///
+    /// 按 virtual_key 认字母（Ctrl/Alt 会把 character 变成控制字符）。
+    fn apply_emacs(&mut self, event: &KeyEvent) -> Option<Effect> {
+        let vk = event.virtual_key;
+        // 字母键码 0x41..0x5a（A..Z）
+        if !(0x41..=0x5A).contains(&vk) {
+            return None;
+        }
+        let lower = vk + 32; // a..z
+        if event.modifiers.ctrl && !event.modifiers.alt {
+            return Some(match lower {
+                0x61 => {
+                    self.engine.move_cursor_home();
+                    Effect::Changed(None)
+                }
+                0x65 => {
+                    self.engine.move_cursor_end();
+                    Effect::Changed(None)
+                }
+                0x77 => {
+                    self.engine.delete_syllable_backward();
+                    Effect::Changed(None)
+                }
+                0x75 => {
+                    self.engine.delete_to_start();
+                    Effect::Changed(None)
+                }
+                _ => return None,
+            });
+        }
+        if event.modifiers.alt && !event.modifiers.ctrl {
+            return Some(match lower {
+                0x66 => {
+                    self.engine.move_cursor_syllable_right();
+                    Effect::Changed(None)
+                }
+                0x62 => {
+                    self.engine.move_cursor_syllable_left();
+                    Effect::Changed(None)
+                }
+                _ => return None,
+            });
+        }
+        None
     }
 
     /// 退格 / Esc / 回车 / Tab / 方向键；没在组句时都交还应用。
@@ -150,13 +211,19 @@ impl Router {
         }
     }
 
-    /// 中文模式：小写字母进拼音；Shift 大写字母是临时打英文，组句中先把拼音原样上屏；
-    /// 没在组句时的其他字符走全角标点（与 macOS 壳一致，组句中的标点仍进英文直输段）。
+    /// 中文模式：小写字母进拼音；组句中的大写字母也进缓冲区（中英混输，`woxiangxueRust` → 我想学Rust）；
+    /// 没在组句时的大写字母是临时打英文，直接放行。没在组句时的其他字符走全角标点（与 macOS 壳一致，
+    /// 组句中的标点仍进英文直输段）。
     fn apply_chinese(&mut self, c: char, event: &KeyEvent) -> Effect {
         if c.is_ascii_uppercase() {
-            let raw = self.composing().then(|| self.engine.take_raw());
+            if self.composing() {
+                // 组句中：大写字母进缓冲区，交给 engine 做中英混输切分
+                self.engine.push(c);
+                return Effect::Changed(None);
+            }
+            // 没在组句：临时打英文，直接放行
             self.engine.note_passthrough(c);
-            return with_prefix(raw, Effect::Passthrough, c);
+            return Effect::Passthrough;
         }
         if c.is_ascii_lowercase() {
             self.engine.push(c);
@@ -219,6 +286,31 @@ impl Router {
         }
         if c == ' ' {
             return Effect::Changed(Some(self.commit_highlighted()));
+        }
+        // 中文候选后敲标点：先提交候选，再把标点作为文本流的一部分处理，避免整个缓冲区退化成英文直输。
+        // 这样 `nihc,zdjm` / `veuiufme?` 都只需在最后按一次空格。
+        if c.is_ascii_punctuation()
+            && c != '\''
+            && !(c == ';' && self.engine.takes_semicolon())
+            && self
+                .layout_candidate(self.highlight)
+                .is_some_and(|candidate| {
+                    matches!(
+                        candidate.kind,
+                        CandidateKind::Chinese | CandidateKind::Sentence
+                    )
+                })
+        {
+            let mut text = self.commit_highlighted();
+            if self.full_width_for(event.modifiers.caps)
+                && let Some(converted) = self.engine.punctuate(c)
+            {
+                text.push_str(converted);
+            } else {
+                self.engine.note_passthrough(c);
+                text.push(c);
+            }
+            return Effect::Changed(Some(text));
         }
         // 表达式 / 问字模式下的其他字符不进缓冲区（与 macOS 壳一致）：先把高亮候选上屏，再按没在组句处理这个键。
         if c != '\'' && (expression || self.engine.question_mode()) {

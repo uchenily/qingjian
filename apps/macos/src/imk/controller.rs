@@ -461,10 +461,13 @@ impl QingjianInputController {
             }
             return self.handle_text(text, client);
         }
-        // 按住 Shift 打的大写字母：临时打英文，先把拼音原样上屏，再把字母交给应用
+        // 组句中的大写字母进缓冲区（中英混输，`woxiangxueRust` → 我想学Rust）；
+        // 没在组句时临时打英文，直接放行
         if c.is_ascii_uppercase() {
             if composing {
-                self.commit_raw(client);
+                host::with(|h| h.engine.push(c));
+                self.refresh(client);
+                return true;
             }
             host::with(|h| h.engine.note_passthrough(c));
             return false;

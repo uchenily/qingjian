@@ -399,6 +399,22 @@ fn is_raw(text: &str, modes: ModeKeys, shuangpin: Option<Scheme>, zhuyin: bool) 
         {
             return false;
         }
+        // 拼音前缀 + 大写字母开头的英文尾（`woxiangxueRust`）：不是纯英文直输段，
+        // 交给中英混输切分（`split_english_tail`）查词表决定。
+        if let Some((prefix, suffix)) = text.split_once(|c: char| c.is_ascii_uppercase())
+            && !prefix.is_empty()
+            && prefix.chars().all(|c| is_key(c) || c == '\'')
+            && suffix.bytes().all(|b| b.is_ascii_alphabetic())
+            && match shuangpin {
+                Some(scheme) => {
+                    let decoded = scheme.decode(prefix);
+                    decoded.is_complete() && decoded.segmentation().is_some()
+                }
+                None => parser::is_fully_segmentable(prefix),
+            }
+        {
+            return false;
+        }
         return true;
     }
     false
