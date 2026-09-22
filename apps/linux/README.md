@@ -174,7 +174,14 @@ shuangpin = "xiaohe"
 page_size = 5
 # 翻页键（默认 [ ]）
 page_keys = "[]"
+
+[fuzzy]
+# 按需开启模糊音；例如金/京、脑/老、南/兰
+in_ing = true
+n_l = true
 ```
+
+`in_ing` 开启后输入 `jin` 可查 `jing`（金 / 京）；`n_l` 开启后输入 `nao`、`nan` 可分别查 `lao`、`lan`（脑 / 老、南 / 兰）。模糊命中的候选会排在准确音之后。
 
 改完配置重启 fcitx5 生效：`fcitx5 -r`。
 

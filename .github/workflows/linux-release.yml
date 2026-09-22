@@ -76,8 +76,11 @@ jobs:
           # rolling release 的 tag 固定为 linux-latest；不存在就建，存在就更新
           if ! gh release view linux-latest >/dev/null 2>&1; then
             gh release create linux-latest \
-              --title "青简 Linux 最新版" \
-              --notes "每次推 feat/linux-fcitx5 自动构建，覆盖旧版本。下载最新的 .tar.gz，解压后 sudo ./install.sh。" \
+              --title "青简 Linux 最新版-基于feat/linux-fcitx5分支构建" \
+              --notes "每次推 feat/linux-fcitx5 自动构建，覆盖旧版本。下载最新的 .tar.gz，解压后 sudo ./install.sh。
+            目前主要测试环境是Fedora 44，如遇到环境兼容问题可以随时提issue。
+
+            最新构建：$COMMIT · $DATE"
               --prerelease
           else
             # 清掉旧资产（gh release upload --clobber 也能覆盖，但先删干净避免残留）
@@ -91,5 +94,6 @@ jobs:
           DATE="$(date -u +%Y-%m-%d\ %H:%M\ UTC)"
           gh release edit linux-latest \
             --notes "每次推 feat/linux-fcitx5 自动构建，覆盖旧版本。下载最新的 .tar.gz，解压后 sudo ./install.sh。
+          目前主要测试环境是Fedora 44，如遇到环境兼容问题可以随时提issue。
 
           最新构建：$COMMIT · $DATE"
