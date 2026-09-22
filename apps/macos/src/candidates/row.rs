@@ -25,9 +25,6 @@ pub struct Row {
 
     /// 右侧 annotation，按顺序绘制；没有译文时为空。
     pub annotation: Vec<(String, Tone)>,
-
-    /// 来自云联想：词前画一个小云朵，与本地候选区分。
-    pub cloud: bool,
 }
 
 impl Row {
@@ -67,7 +64,6 @@ impl Row {
                 candidate.text.clone()
             },
             annotation,
-            cloud: false,
         }
     }
 }

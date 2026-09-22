@@ -35,14 +35,8 @@ pub enum Setting {
     /// `[shortcut] expression`，弹出菜单 v / u / i。
     ExpressionKey,
 
-    /// `[shortcut] question`，弹出菜单 v / u / i。
-    QuestionKey,
-
     /// `[fuzzy]` 里的一条规则，值是 [`FuzzyRules::NAMES`] 的下标。
     Fuzzy(usize),
-
-    /// `[predict] enabled`。
-    CloudEnabled,
 
     /// `[model] enabled`。
     LocalModelEnabled,
@@ -71,15 +65,6 @@ pub enum Setting {
     /// 关闭编辑表单。
     CancelPhraseEdit,
 
-    /// `[predict] base_url`。
-    BaseUrl,
-
-    /// `[predict] model`。
-    Model,
-
-    /// 密钥，写到 `.env`。
-    ApiKey,
-
     /// 「在编辑器中打开配置文件」按钮。
     OpenConfigFile,
 
@@ -98,10 +83,7 @@ pub enum Setting {
     /// `[shortcut] translation_second`，同上。
     TranslationSecondKeys,
 
-    /// `[shortcut] translate_selection`，快捷键录制按钮（修饰键 + 字母）。
-    TranslateSelectionKeys,
-
-    /// 「恢复默认快捷键」按钮：翻页键、模式键、三组译词 / 翻译快捷键全部回缺省。
+    /// 「恢复默认快捷键」按钮：翻页键、模式键、译词快捷键全部回缺省。
     ResetShortcuts,
 
     /// 「导入词库…」按钮：选文件，转成 `.qj` 放进用户目录 `dicts/`。
@@ -125,9 +107,6 @@ pub enum Setting {
     /// 「关于」页「复制诊断信息」按钮。
     CopyDiagnostics,
 
-    /// `[predict] slots`，弹出菜单 0–4：第一页末尾留给云端词的格数。
-    CloudSlots,
-
     /// `[shortcut] delete_candidate`，快捷键录制按钮（只记修饰键）。
     DeleteCandidateKeys,
 
@@ -136,9 +115,6 @@ pub enum Setting {
 
     /// 「高级」页「清空输入日志」按钮。
     ClearInputLog,
-
-    /// 「云服务」页「测试连接」按钮。
-    TestCloud,
 
     /// 「关于」页「官网」按钮。
     OpenWebsite,
@@ -155,29 +131,21 @@ impl Setting {
             Self::PageKeys => 3,
             Self::Theme => 4,
             Self::ExpressionKey => 5,
-            Self::QuestionKey => 6,
-            Self::CloudEnabled => 7,
-            Self::BaseUrl => 8,
-            Self::Model => 9,
-            Self::ApiKey => 10,
             Self::OpenConfigFile => 11,
             Self::Layout => 12,
             Self::Preedit => 13,
             Self::ChineseFirst => 42,
             Self::TranslationKeys => 15,
             Self::TranslationSecondKeys => 16,
-            Self::TranslateSelectionKeys => 17,
             Self::ResetShortcuts => 18,
             Self::ImportDictionary => 19,
             Self::Shuangpin => 20,
             Self::VerboseLog => 21,
             Self::OpenLogDirectory => 22,
             Self::CopyDiagnostics => 23,
-            Self::CloudSlots => 24,
             Self::DeleteCandidateKeys => 26,
             Self::InputLog => 27,
             Self::ClearInputLog => 28,
-            Self::TestCloud => 29,
             Self::OpenWebsite => 30,
             Self::OpenRepository => 31,
             Self::LocalModelEnabled => 32,
@@ -202,29 +170,21 @@ impl Setting {
             3 => Self::PageKeys,
             4 => Self::Theme,
             5 => Self::ExpressionKey,
-            6 => Self::QuestionKey,
-            7 => Self::CloudEnabled,
-            8 => Self::BaseUrl,
-            9 => Self::Model,
-            10 => Self::ApiKey,
             11 => Self::OpenConfigFile,
             12 => Self::Layout,
             13 => Self::Preedit,
             42 => Self::ChineseFirst,
             15 => Self::TranslationKeys,
             16 => Self::TranslationSecondKeys,
-            17 => Self::TranslateSelectionKeys,
             18 => Self::ResetShortcuts,
             19 => Self::ImportDictionary,
             20 => Self::Shuangpin,
             21 => Self::VerboseLog,
             22 => Self::OpenLogDirectory,
             23 => Self::CopyDiagnostics,
-            24 => Self::CloudSlots,
             26 => Self::DeleteCandidateKeys,
             27 => Self::InputLog,
             28 => Self::ClearInputLog,
-            29 => Self::TestCloud,
             30 => Self::OpenWebsite,
             31 => Self::OpenRepository,
             32 => Self::LocalModelEnabled,
@@ -264,29 +224,21 @@ mod tests {
             Setting::PageKeys,
             Setting::Theme,
             Setting::ExpressionKey,
-            Setting::QuestionKey,
-            Setting::CloudEnabled,
             Setting::LocalModelEnabled,
-            Setting::BaseUrl,
-            Setting::Model,
-            Setting::ApiKey,
             Setting::OpenConfigFile,
             Setting::Layout,
             Setting::Preedit,
             Setting::TranslationKeys,
             Setting::TranslationSecondKeys,
-            Setting::TranslateSelectionKeys,
             Setting::ResetShortcuts,
             Setting::ImportDictionary,
             Setting::Shuangpin,
             Setting::VerboseLog,
             Setting::OpenLogDirectory,
             Setting::CopyDiagnostics,
-            Setting::CloudSlots,
             Setting::DeleteCandidateKeys,
             Setting::InputLog,
             Setting::ClearInputLog,
-            Setting::TestCloud,
             Setting::OpenWebsite,
             Setting::OpenRepository,
             Setting::DictionaryEnabled(0),

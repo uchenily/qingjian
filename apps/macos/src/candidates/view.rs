@@ -14,7 +14,6 @@ use objc2_foundation::{
 };
 use qingjian_platform::LayoutMode;
 
-use super::cloud_icon::CloudIcon;
 use super::frame::Frame;
 use super::preedit::Preedit;
 use super::preedit::PreeditStyle;
@@ -29,9 +28,6 @@ pub struct Ivars {
     /// 竖排 / 横排。
     layout: Cell<LayoutMode>,
 
-    /// 云联想的小云朵。
-    cloud: CloudIcon,
-
     /// 主题。
     theme: Theme,
 }
@@ -39,16 +35,7 @@ pub struct Ivars {
 /// preedit 光标的宽度。
 const CARET_WIDTH: f64 = 1.5;
 
-/// 云朵图标边长。
-const CLOUD_SIZE: f64 = 13.0;
-
-/// 云朵与后面文字的间距。
-const CLOUD_GAP: f64 = 4.0;
-
-/// 拿不到 SF Symbol 时的文字云朵。
-const CLOUD_FALLBACK: &str = "☁︎";
-
-/// preedit 与右侧整句补全之间的间距。
+/// preedit 与右侧状态文字之间的间距。
 const SENTENCE_GAP: f64 = 16.0;
 
 /// 横排时序号与候选词之间的间距。
@@ -97,11 +84,9 @@ define_class!(
 
 impl CandidateView {
     pub fn new(mtm: MainThreadMarker, theme: Theme) -> Retained<Self> {
-        let cloud = CloudIcon::new(&theme.cloud_color, CLOUD_SIZE);
         let this = mtm.alloc::<Self>().set_ivars(Ivars {
             frame: RefCell::new(Frame::default()),
             layout: Cell::new(LayoutMode::default()),
-            cloud,
             theme,
         });
         unsafe { msg_send![super(this), initWithFrame: NSRect::ZERO] }
@@ -148,12 +133,9 @@ impl CandidateView {
         if let Some(preedit) = &frame.preedit {
             width += self.measure(&preedit.text(), &theme.annotation_font).width + CARET_WIDTH;
         }
-        if let Some((text, cloud)) = frame.trailing() {
+        if let Some(text) = frame.trailing() {
             if frame.preedit.is_some() {
                 width += SENTENCE_GAP;
-            }
-            if cloud {
-                width += self.cloud_width();
             }
             width += self.measure(text, &theme.annotation_font).width;
         }
@@ -216,37 +198,6 @@ impl CandidateView {
         Some((width, height))
     }
 
-    /// 云朵图标占的宽度（含后面的间距）。
-    fn cloud_width(&self) -> f64 {
-        let cloud = &self.ivars().cloud;
-        let width = if cloud.is_symbol() {
-            cloud.width()
-        } else {
-            self.measure(CLOUD_FALLBACK, &self.theme().annotation_font)
-                .width
-        };
-        width + CLOUD_GAP
-    }
-
-    /// 画云朵，返回占用宽度（含间距）。`top` 是所在行文字的顶边，`line_height` 用来垂直居中。
-    fn draw_cloud(&self, x: f64, top: f64, line_height: f64) -> f64 {
-        let cloud = &self.ivars().cloud;
-        if cloud.is_symbol() {
-            cloud.draw(x, top + (line_height - cloud.width()) / 2.0);
-        } else {
-            let theme = self.theme();
-            let size = self.measure(CLOUD_FALLBACK, &theme.annotation_font);
-            self.draw_text(
-                CLOUD_FALLBACK,
-                &theme.annotation_font,
-                &theme.cloud_color,
-                top + (line_height - size.height) / 2.0,
-                x,
-            );
-        }
-        self.cloud_width()
-    }
-
     fn columns(&self, rows: &[Row]) -> Columns {
         let theme = self.theme();
         let mut columns = Columns {
@@ -257,10 +208,7 @@ impl CandidateView {
         };
         for row in rows {
             let index = self.measure(&row.index, &theme.index_font);
-            let mut text = self.measure(&row.text, &theme.text_font);
-            if row.cloud {
-                text.width += self.cloud_width();
-            }
+            let text = self.measure(&row.text, &theme.text_font);
             let annotation: f64 = row
                 .annotation
                 .iter()
@@ -284,10 +232,7 @@ impl CandidateView {
             .iter()
             .map(|row| {
                 let index = self.measure(&row.index, &theme.index_font);
-                let mut text = self.measure(&row.text, &theme.text_font);
-                if row.cloud {
-                    text.width += self.cloud_width();
-                }
+                let text = self.measure(&row.text, &theme.text_font);
                 row_height = row_height.max(text.height + theme.row_padding * 2.0);
                 Item {
                     index_width: index.width,
@@ -335,15 +280,9 @@ impl CandidateView {
                 x += SENTENCE_GAP;
             }
         }
-        // 整句补全：云朵 + 句子，颜色与本地候选区分；临时状态灰字、不带云朵
-        if let Some((text, cloud)) = frame.trailing() {
-            let color = if cloud {
-                x += self.draw_cloud(x, top, line_height);
-                &theme.cloud_color
-            } else {
-                &theme.gloss_color
-            };
-            self.draw_text(text, &theme.annotation_font, color, top, x);
+        // 右侧状态文字（灰字）
+        if let Some(text) = frame.trailing() {
+            self.draw_text(text, &theme.annotation_font, &theme.gloss_color, top, x);
         }
         line_height + theme.row_padding * 2.0
     }
@@ -483,19 +422,10 @@ impl CandidateView {
         }
     }
 
-    /// 候选词本体：云端词前带云朵、换颜色。
-    fn draw_word(&self, row: &Row, x: f64, baseline: f64, text_height: f64) {
+    /// 候选词本体。
+    fn draw_word(&self, row: &Row, x: f64, baseline: f64, _text_height: f64) {
         let theme = self.theme();
-        let mut word_x = x;
-        if row.cloud {
-            word_x += self.draw_cloud(word_x, baseline, text_height);
-        }
-        let color = if row.cloud {
-            &theme.cloud_color
-        } else {
-            &theme.text_color
-        };
-        self.draw_text(&row.text, &theme.text_font, color, baseline, word_x);
+        self.draw_text(&row.text, &theme.text_font, &theme.text_color, baseline, x);
     }
 
     fn fill_highlight(&self, rect: NSRect) {

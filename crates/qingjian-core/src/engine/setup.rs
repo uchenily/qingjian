@@ -56,17 +56,15 @@ impl Engine {
     }
 
     /// 组句中敲 `;` 是否该进缓冲区：微软 / 搜狗双拼里它是 ing 的韵母键，只在末尾有落单的声母时收，
-    /// 其他时候仍是标点。问字模式（`?x`）看的是前缀之后的部分。
+    /// 其他时候仍是标点。
     pub fn takes_semicolon(&self) -> bool {
-        let body = self
-            .modes()
-            .question_body(self.composition.scope(), self.zhuyin);
+        let body = self.composition.scope();
         self.shuangpin
             .filter(|scheme| scheme.uses_semicolon())
             .is_some_and(|scheme| scheme.decode(body).pending_initial())
     }
 
-    /// 有效的模式键：双拼下 v / u / i 都是音节键，字母模式键让位，只剩 `?` 开头的问字。
+    /// 有效的模式键：双拼下 v / u / i 都是音节键，字母模式键让位。
     pub(super) fn modes(&self) -> ModeKeys {
         if self.shuangpin.is_some() {
             ModeKeys::LETTERLESS
@@ -113,17 +111,6 @@ impl Engine {
 
     pub fn fuzzy(&self) -> FuzzyRules {
         self.fuzzy
-    }
-
-    pub fn with_predictor(mut self, predictor: Box<dyn Predictor>) -> Self {
-        self.predictor = predictor;
-        self
-    }
-
-    /// 运行时换掉 Predictor（菜单开关云联想 / 配置热加载）；正在等的联想一并作废。
-    pub fn set_predictor(&mut self, predictor: Box<dyn Predictor>) {
-        self.cancel_prediction();
-        self.predictor = predictor;
     }
 
     /// 挂上同步的整句重打分器（字级 Transformer，查询里当场打分，评测用）。`weight` 是神经分的权重 λ，
@@ -318,16 +305,6 @@ impl Engine {
     pub fn with_vocabulary_tracker(mut self, tracker: Box<dyn VocabularyTracker>) -> Self {
         self.vocabulary = tracker;
         self
-    }
-
-    pub fn with_gloss_filler(mut self, filler: Box<dyn GlossFiller>) -> Self {
-        self.gloss_filler = filler;
-        self
-    }
-
-    /// 运行时换释义兜底（随云联想开关）。
-    pub fn set_gloss_filler(&mut self, filler: Box<dyn GlossFiller>) {
-        self.gloss_filler = filler;
     }
 
     pub fn dictionary(&self) -> &Dictionary {

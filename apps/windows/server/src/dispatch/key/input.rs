@@ -1,6 +1,6 @@
 //! 按键怎么作用到 Engine / 高亮上。分流规则与 macOS 壳的 `handle_text` / `handle_command` 对齐。
 
-use qingjian_core::{CandidateKind, QUESTION_PREFIX, shortcut};
+use qingjian_core::{CandidateKind, shortcut};
 use qingjian_platform::protocol::KeyEvent;
 
 use super::{Effect, codes, with_prefix};
@@ -44,46 +44,13 @@ impl Router {
         // Caps 亮着无论中英模式都直接出大写英文。
         let caps = event.modifiers.caps;
         let english = caps;
-        // 缓冲区为空时敲 `?` 先进问字模式
-        if !self.composing() && c == QUESTION_PREFIX {
-            self.engine.set_english_mode(false);
-            self.engine.push(c);
-            return Effect::Changed(None);
-        }
-        let question = self.composing() && self.engine.question_mode();
-        // Caps 亮时问字：字母以大写送来，按小写收进问题。
-        let c = if question && english && c.is_ascii_uppercase() {
-            c.to_ascii_lowercase()
-        } else {
-            c
-        };
-        // 只有一个 `?` 时敲了字母以外的键：还原成问号上屏；空格只是「把这个 ? 上屏」，其他键按没在组句重新分派。
-        if question && !c.is_ascii_lowercase() && self.engine.bare_question() {
-            let mark = self.restore_bare_question(english);
-            if c == ' ' {
-                return Effect::Changed(Some(mark));
-            }
-            return with_prefix(Some(mark), self.apply_key(event), c);
-        }
         self.engine.set_english_mode(false);
-        let effect = if english && !question {
+        let effect = if english {
             self.apply_english(c, event)
         } else {
             self.apply_chinese(c, event)
         };
         with_prefix(None, effect, c)
-    }
-
-    /// 缓冲区里只有一个 `?`：清掉，还原成问号（按当前模式的全角设置转）。
-    fn restore_bare_question(&mut self, english: bool) -> String {
-        self.engine.clear();
-        if self.full_width_for(english)
-            && let Some(mark) = self.engine.punctuate(QUESTION_PREFIX)
-        {
-            return mark.to_owned();
-        }
-        self.engine.note_passthrough(QUESTION_PREFIX);
-        QUESTION_PREFIX.to_string()
     }
 
     /// emacs 风格编辑键（仅组句中调用）。返回 `Some` 表示已处理，`None` 表示不是 emacs 键、交给后续逻辑。
@@ -149,14 +116,7 @@ impl Router {
             }
             return Effect::Passthrough;
         }
-        // 只有一个 `?` 时按了回车：回车就是「把这个 ? 上屏」，吞掉，否则聊天框会连消息一起发出去；
-        // 退格 / Esc 照常删掉它。其他功能键 macOS 壳还原后交给应用，Windows 放行同步、上屏异步，
-        // 先动光标再插问号会插错位置，所以还原后一并吞掉。
-        if self.engine.bare_question() && !matches!(event.virtual_key, codes::BACK | codes::ESCAPE)
-        {
-            let english = event.modifiers.caps;
-            return Effect::Changed(Some(self.restore_bare_question(english)));
-        }
+        // 只有一个 `?` 的还原逻辑已随问字模式移除。
         match event.virtual_key {
             codes::BACK => {
                 self.engine.backspace();
@@ -170,11 +130,8 @@ impl Router {
             codes::TAB if self.engine.english_mode() => {
                 Effect::Changed(Some(self.commit_highlighted()))
             }
-            // 中文模式 Tab：有整句补全就接受，否则交还应用（缩进 / 跳焦点）。
-            codes::TAB => match self.sentence.take() {
-                Some(sentence) => Effect::Changed(Some(self.engine.accept_prediction(&sentence))),
-                None => Effect::Passthrough,
-            },
+            // 中文模式 Tab：没有整句补全，交还应用（缩进 / 跳焦点）。
+            codes::TAB => Effect::Passthrough,
             codes::DOWN => {
                 self.move_highlight(1);
                 Effect::Navigated
@@ -262,12 +219,10 @@ impl Router {
     }
 
     /// 组句中的可打印键：数字选当前页第 N 个，翻页键翻页，空格上屏高亮，其余进英文直输段。
-    /// 表达式模式（`v1+2`）里数字和运算符进算式；问字模式敲的还可能是码点（`u4e00`、`u+1f600`），数字与 `+` 进缓冲区；
-    /// 微软 / 搜狗双拼的 `;` 是 ing 键，末尾有落单声母时进缓冲区。
+    /// 表达式模式（`v1+2`）里数字和运算符进算式；微软 / 搜狗双拼的 `;` 是 ing 键，末尾有落单声母时进缓冲区。
     fn apply_printable(&mut self, c: char, event: &KeyEvent) -> Effect {
         let expression = self.engine.expression_mode();
         if (expression && shortcut::is_expression_char(c))
-            || (self.engine.unicode_entry() && (c.is_ascii_digit() || c == '+'))
             || (c == ';' && self.engine.takes_semicolon())
         {
             self.engine.push(c);
@@ -312,8 +267,8 @@ impl Router {
             }
             return Effect::Changed(Some(text));
         }
-        // 表达式 / 问字模式下的其他字符不进缓冲区（与 macOS 壳一致）：先把高亮候选上屏，再按没在组句处理这个键。
-        if c != '\'' && (expression || self.engine.question_mode()) {
+        // 表达式模式下的其他字符不进缓冲区（与 macOS 壳一致）：先把高亮候选上屏，再按没在组句处理这个键。
+        if c != '\'' && expression {
             let committed = self.commit_highlighted();
             let effect = self.apply_punctuation(c, event);
             return with_prefix(Some(committed), effect, c);

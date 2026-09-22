@@ -1,14 +1,13 @@
 use qingjian_core::ModeKeys;
 use serde::{Deserialize, Serialize};
 
-use super::key_combo::KeyCombo;
 use super::modifiers::Modifiers;
 
 /// 配置文件 `[shortcut]` 分节：前缀模式键（Core 的 [`ModeKeys`]）加壳层的修饰键组合。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ShortcutConfig {
-    /// 表达式 / 问字模式键，键名与以前一样直接在分节下（`expression` / `question`）。
+    /// 表达式模式键，键名直接在分节下（`expression`）。
     #[serde(flatten)]
     pub mode: ModeKeys,
 
@@ -17,9 +16,6 @@ pub struct ShortcutConfig {
 
     /// 数字键配这些修饰键：上屏候选的第二个译词（候选右侧有两个译词时）。
     pub translation_second: Modifiers,
-
-    /// 把应用里选中的文字译成学习语言（需要云服务开着）。
-    pub translate_selection: KeyCombo,
 
     /// 数字键配这些修饰键：删掉候选（用户词整个删掉，词库词清掉对它的学习）。
     pub delete_candidate: Modifiers,
@@ -36,7 +32,6 @@ impl Default for ShortcutConfig {
             mode: ModeKeys::default(),
             translation,
             translation_second,
-            translate_selection: KeyCombo::TRANSLATE_DEFAULT,
             delete_candidate: Modifiers::SHIFT,
         }
     }

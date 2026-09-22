@@ -69,9 +69,6 @@ impl Engine {
         if self.modes().is_expression(keys, self.zhuyin) {
             return Ok(self.query_expression(keys, rest, start));
         }
-        if self.modes().is_question(keys, self.zhuyin) {
-            return Ok(self.query_question(keys, rest, start));
-        }
         if is_raw(keys, self.modes(), self.shuangpin, self.zhuyin) {
             return Ok(self.query_raw(keys, rest, start));
         }
@@ -386,47 +383,6 @@ impl Engine {
         }
     }
 
-    /// 问字模式（问字键或 `?` 开头）：拼音问题本地没有候选，preedit 显示前缀加切分好的问题拼音，答案等云端；
-    /// 十六进制码点（`u4e00`、`u+1f600`）本地直接给出那个字符。
-    pub(super) fn query_question(&self, scope: &str, rest: String, start: Instant) -> Query {
-        let body = self.modes().question_body(scope, self.zhuyin);
-        let prefix = &scope[..scope.len() - body.len()];
-        let (candidates, tail) = match shortcut::unicode_form(body) {
-            Some(text) => (
-                CandidateList {
-                    items: vec![Candidate {
-                        text,
-                        kind: CandidateKind::Shortcut,
-                        syllables: Vec::new(),
-                        reading: None,
-                        translation: None,
-                    }],
-                },
-                scope.to_owned(),
-            ),
-            None => (
-                CandidateList::default(),
-                format!("{prefix}{}", self.marked_rest(body)),
-            ),
-        };
-        Query {
-            segmentations: Vec::new(),
-            candidates,
-            tail,
-            text: self.composition.text().to_owned(),
-            cursor: self.composition.cursor(),
-            rest,
-            decoded_keys: self.shuangpin.is_some() || self.zhuyin,
-            typed_display: None,
-            correction: None,
-            timings: Timings {
-                parse: start.elapsed(),
-                lookup: Duration::ZERO,
-                rank: Duration::ZERO,
-            },
-        }
-    }
-
     /// 整句候选。没有英文尾段时是整段拼音的转换（[`Self::plain_sentence`]），排在开头的英文候选之后。
     /// 有英文尾段且英文读法胜出（`head_wins`）时，头段的转换加上那个词排第一（`woxiangxuehaorust` → 我想学好rust），
     /// 整段也能读成拼音的再把拼音读法的整句放在第二；英文读法输了就不出（`diaoyong` 不出 掉Yong），
@@ -601,17 +557,7 @@ impl Engine {
         expanded
     }
 
-    /// 本地整句转换把最优切分转成的汉字，给云端当参考（问字模式里就是问题的汉字形式）；转不出或有占位音节为空。
-    pub(super) fn local_guess(&self, segmentations: &[Segmentation]) -> String {
-        segmentations
-            .first()
-            .and_then(|best| self.convert_sentence(&best.patterns(), true))
-            .filter(|conversion| !conversion.has_placeholder())
-            .map(|conversion| conversion.text)
-            .unwrap_or_default()
-    }
-
-    /// 主词库与用户词一起查（每个位置多种写法）。用户词是用户自己选过的（云联想接受的词等），排序上靠 weight 自然靠前。
+    /// 主词库与用户词一起查（每个位置多种写法）。用户词是用户自己选过的，排序上靠 weight 自然靠前。
     pub(super) fn lookup_all(
         &self,
         positions: &[Vec<qingjian_dictionary::SyllablePattern<'_>>],

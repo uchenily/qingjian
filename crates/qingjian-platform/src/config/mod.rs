@@ -14,7 +14,6 @@ mod theme_mode;
 use std::path::Path;
 
 use qingjian_core::FuzzyRules;
-use qingjian_predict::PredictConfig;
 use serde::{Deserialize, Serialize};
 use toml_edit::DocumentMut;
 
@@ -57,9 +56,6 @@ pub struct Config {
 
     /// 按应用改行为（哪些应用里英文模式不给候选）。
     pub apps: AppsConfig,
-
-    /// 云联想。
-    pub predict: PredictConfig,
 
     /// 悬浮状态条（桌面上常驻、可拖动的中 / 英浮窗）。
     pub status_bar: StatusBarConfig,
@@ -107,10 +103,7 @@ macro_rules! template_shortcut_keys {
 # 任意修饰键组合（option / shift / control / command 用 + 连），偏好设置里点按钮录制；别用 control+数字（系统切桌面）和 command+数字（应用切标签页）
 translation = "option"
 translation_second = "shift+option"
-# 把应用里选中的文字译成学习语言（要开着云服务）：译文先出现在候选窗口，回车替换选中的文字，Esc 保留原文
-# 修饰键 + 一个字母或数字，任意组合；避开 ⌘T 这类应用常用键
-translate_selection = "control+option+t"
-# 数字键配这些修饰键删掉候选：用户词（云端选过的、自动造的）整个删掉，词库里的词清掉对它的学习记录。组句中要打感叹号先把词上屏
+# 数字键配这些修饰键删掉候选：用户词（自动造的）整个删掉，词库里的词清掉对它的学习记录。组句中要打感叹号先把词上屏
 delete_candidate = "shift"
 "#
     };
@@ -124,9 +117,7 @@ macro_rules! template_shortcut_keys {
 # 任意修饰键组合（alt / shift / ctrl / win 用 + 连）。Alt+数字会被 Windows 当菜单快捷键截走，缺省用 Ctrl；组句时才拦，不打字时照常放行给应用
 translation = "ctrl"
 translation_second = "shift+ctrl"
-# 把应用里选中的文字译成学习语言（要开着云服务）：Windows 上还没接
-translate_selection = "ctrl+alt+t"
-# 数字键配这些修饰键删掉候选：用户词（云端选过的、自动造的）整个删掉，词库里的词清掉对它的学习记录。组句中要打感叹号先把词上屏
+# 数字键配这些修饰键删掉候选：用户词（自动造的）整个删掉，词库里的词清掉对它的学习记录。组句中要打感叹号先把词上屏
 delete_candidate = "shift"
 "#
     };
@@ -141,9 +132,7 @@ macro_rules! template_shortcut_keys {
 # 任意修饰键组合（alt / shift / ctrl / super 用 + 连）；避开 ctrl+数字（系统切桌面）和 super+数字（桌面切工作区）
 translation = "alt"
 translation_second = "shift+alt"
-# 把应用里选中的文字译成学习语言（要开着云服务）：Linux 上还没接
-translate_selection = "ctrl+alt+t"
-# 数字键配这些修饰键删掉候选：用户词（云端选过的、自动造的）整个删掉，词库里的词清掉对它的学习记录。组句中要打感叹号先把词上屏
+# 数字键配这些修饰键删掉候选：用户词（自动造的）整个删掉，词库里的词清掉对它的学习记录。组句中要打感叹号先把词上屏
 delete_candidate = "shift"
 "#
     };
@@ -235,29 +224,6 @@ disabled = []
 [model]
 # 本地整句模型：随包的小模型在本机给整句候选重新排序，全程离线；停顿后几十毫秒生效。关掉只用词库统计
 enabled = true
-
-[predict]
-# 云联想：把光标附近的文本发到下面的接口，让模型补全整句 / 联想下文。默认关闭。
-# 开启后菜单栏的「中 / 英」旁会带一个云朵标识；Secure Input（密码框）里绝不发送。
-enabled = false
-# OpenAI 兼容接口地址与模型名（DeepSeek 默认值）
-base_url = "https://api.deepseek.com"
-model = "deepseek-v4-flash"
-# 推理强度（reasoning_effort）：none 关掉模型的思考，联想要快；留空则不发这个参数
-reasoning_effort = "none"
-# 密钥：填在这里，或留空并设置 api_key_env 指定的环境变量（偏好设置里填的密钥写进配置同目录的 .env）
-# api_key = ""
-api_key_env = "QINGJIAN_API_KEY"
-# 单次请求超时（毫秒）、停止敲键多久后才发请求（毫秒）
-timeout_ms = 5000
-debounce_ms = 300
-# 光标前 / 后最多发多少个字符——这是发往云端的上下文上限
-lookback = 64
-lookahead = 32
-# 云端词到了补进候选窗口第一页末尾几格（比如 2 就是 8、9 两格），前面的本地候选不动；0 表示不要云端词
-slots = 2
-# 组句中除了词候选还要不要整句补全（preedit 右侧，Tab 接受）
-sentence = true
 
 [status_bar]
 # 桌面上常驻、可拖动的悬浮状态条（Windows）：「中 / 英」格点一下切换模式（开着双拼时还显示方案名）、「，。」格切全角 / 半角标点、齿轮打开设置。
@@ -393,7 +359,7 @@ impl Config {
             path: path.to_owned(),
             source,
         })?;
-        // 分节不存在时先建成标准表，否则 toml_edit 会写成顶层的行内表 `predict = { enabled = true }`
+        // 分节不存在时先建成标准表，否则 toml_edit 会写成顶层的行内表
         if !document.get(section).is_some_and(|item| item.is_table()) {
             document[section] = toml_edit::table();
         }
@@ -472,12 +438,10 @@ mod tests {
 
     #[test]
     fn partial_file_keeps_other_defaults() {
-        let config: Config = toml::from_str("[predict]\nenabled = true\nlookback = 10\n").unwrap();
-        assert!(config.predict.enabled);
-        assert_eq!(config.predict.lookback, 10);
-        assert_eq!(config.predict.model, "deepseek-v4-flash");
-        assert_eq!(config.predict.reasoning_effort, "none");
-        assert_eq!(config.predict.api_key_env, "QINGJIAN_API_KEY");
+        let config: Config =
+            toml::from_str("[general]\npage_size = 5\npage_keys = \"[]\"\n").unwrap();
+        assert_eq!(config.general.page_size, 5);
+        assert_eq!(config.general.page_keys(), ('[', ']'));
     }
 
     #[test]
@@ -502,7 +466,6 @@ mod tests {
         assert_eq!(config.general.shuangpin(), None);
         assert_eq!(config.general.log_level, LogLevel::Info);
         assert_eq!(config.shortcut.mode.expression, 'i');
-        assert_eq!(config.shortcut.mode.question, 'u');
         assert_eq!(config.shortcut.translation, Modifiers::OPTION);
     }
 
@@ -512,11 +475,11 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         Config::set_value(&path, "general", "page_size", 5i64).unwrap();
         Config::set_value(&path, "general", "theme", "dark").unwrap();
-        Config::set_value(&path, "shortcut", "question", "i").unwrap();
+        Config::set_value(&path, "shortcut", "expression", "i").unwrap();
         let config = Config::load(&path).unwrap();
         assert_eq!(config.general.page_size, 5);
         assert_eq!(config.general.theme, ThemeMode::Dark);
-        assert_eq!(config.shortcut.mode.question, 'i');
+        assert_eq!(config.shortcut.mode.expression, 'i');
         let _ = std::fs::remove_file(&path);
     }
 
@@ -529,14 +492,13 @@ mod tests {
         )
         .unwrap();
         Config::set_bool(&path, "fuzzy", "z_zh", true).unwrap();
-        Config::set_bool(&path, "predict", "enabled", true).unwrap();
         let text = std::fs::read_to_string(&path).unwrap();
         assert!(
             text.starts_with("# 头注释\n[fuzzy]\n# 说明\nz_zh = true\nn_l = true\n"),
             "{text}"
         );
         let config = Config::load(&path).unwrap();
-        assert!(config.fuzzy.z_zh && config.fuzzy.n_l && config.predict.enabled);
+        assert!(config.fuzzy.z_zh && config.fuzzy.n_l);
         let _ = std::fs::remove_file(&path);
     }
 
@@ -544,10 +506,10 @@ mod tests {
     fn set_bool_starts_from_template_when_missing() {
         let path = std::env::temp_dir().join("qingjian-config-set-bool-missing-test.toml");
         let _ = std::fs::remove_file(&path);
-        Config::set_bool(&path, "predict", "enabled", true).unwrap();
+        Config::set_bool(&path, "fuzzy", "z_zh", true).unwrap();
         let text = std::fs::read_to_string(&path).unwrap();
         assert!(text.contains("# 青简输入法配置"));
-        assert!(Config::load(&path).unwrap().predict.enabled);
+        assert!(Config::load(&path).unwrap().fuzzy.z_zh);
         let _ = std::fs::remove_file(&path);
     }
 

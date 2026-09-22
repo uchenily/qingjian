@@ -52,12 +52,6 @@ impl Host {
     pub fn perform(&mut self, action: MenuAction) {
         tracing::info!(?action, "菜单");
         match action {
-            MenuAction::ToggleCloud => {
-                let on = !self.settings.config().predict.enabled;
-                if self.settings.set_bool("predict", "enabled", on) {
-                    self.apply_config(false);
-                }
-            }
             MenuAction::ToggleFuzzy(index) => {
                 let name = FuzzyRules::NAMES[index];
                 let on = !self.settings.config().fuzzy.is_on(name);
@@ -193,18 +187,12 @@ impl Host {
                     self.settings.set_value("general", "preedit", mode.key());
                 }
             }
-            (Setting::ExpressionKey | Setting::QuestionKey, SettingValue::Index(index)) => {
+            (Setting::ExpressionKey, SettingValue::Index(index)) => {
                 if let Some(&key) = ModeKeys::CANDIDATES.get(index) {
                     let mut keys = config.shortcut.mode.sanitized();
-                    let name = if setting == Setting::ExpressionKey {
-                        keys.expression = key;
-                        "expression"
-                    } else {
-                        keys.question = key;
-                        "question"
-                    };
+                    keys.expression = key;
                     if keys.is_valid() {
-                        self.settings.set_value("shortcut", name, key.to_string());
+                        self.settings.set_value("shortcut", "expression", key.to_string());
                     } else {
                         tracing::warn!("表达式键与问字键不能相同，未改");
                     }
@@ -243,18 +231,6 @@ impl Host {
                     Err(error) => tracing::warn!(%error, "修饰键组合不合法，未改"),
                 }
             }
-            (Setting::TranslateSelectionKeys, SettingValue::Text(text)) => {
-                match text.parse::<KeyCombo>() {
-                    Ok(combo) => {
-                        self.settings.set_value(
-                            "shortcut",
-                            "translate_selection",
-                            combo.key_string(),
-                        );
-                    }
-                    Err(error) => tracing::warn!(%error, "快捷键不合法，未改"),
-                }
-            }
             (Setting::ResetShortcuts, _) => {
                 let defaults = ShortcutConfig::default();
                 self.settings
@@ -265,18 +241,11 @@ impl Host {
                     defaults.mode.expression.to_string(),
                 );
                 self.settings
-                    .set_value("shortcut", "question", defaults.mode.question.to_string());
-                self.settings
                     .set_value("shortcut", "translation", defaults.translation.key());
                 self.settings.set_value(
                     "shortcut",
                     "translation_second",
                     defaults.translation_second.key(),
-                );
-                self.settings.set_value(
-                    "shortcut",
-                    "translate_selection",
-                    defaults.translate_selection.key_string(),
                 );
                 self.settings.set_value(
                     "shortcut",
@@ -307,14 +276,8 @@ impl Host {
                 self.settings
                     .set_bool("fuzzy", FuzzyRules::NAMES[index], on);
             }
-            (Setting::CloudEnabled, SettingValue::Bool(on)) => {
-                self.settings.set_bool("predict", "enabled", on);
-            }
             (Setting::LocalModelEnabled, SettingValue::Bool(on)) => {
                 self.settings.set_bool("model", "enabled", on);
-            }
-            (Setting::CloudSlots, SettingValue::Index(index)) => {
-                self.settings.set_value("predict", "slots", index as i64);
             }
             (Setting::ChineseFirst, SettingValue::Bool(on)) => {
                 self.settings.set_bool("general", "chinese_first", on);
@@ -326,32 +289,6 @@ impl Host {
                     .and_then(|i| ShuangpinScheme::ALL.get(i))
                     .map_or("", |scheme| scheme.key());
                 self.settings.set_value("general", "shuangpin", key);
-            }
-            // 文本框失焦也会发 action：值没变就不写，免得每次切窗口都重写一遍配置
-            (Setting::BaseUrl, SettingValue::Text(text)) => {
-                let text = text.trim();
-                if !text.is_empty() && text != config.predict.base_url {
-                    self.settings.set_value("predict", "base_url", text);
-                }
-            }
-            (Setting::Model, SettingValue::Text(text)) => {
-                let text = text.trim();
-                if !text.is_empty() && text != config.predict.model {
-                    self.settings.set_value("predict", "model", text);
-                }
-            }
-            (Setting::ApiKey, SettingValue::Text(text)) => {
-                let text = text.trim();
-                if !text.is_empty() && self.settings.set_env_var(&config.predict.api_key_env, text)
-                {
-                    // 密钥换了必须重建 Predictor
-                    self.apply_config(true);
-                    return;
-                }
-            }
-            (Setting::TestCloud, _) => {
-                self.start_cloud_test();
-                return;
             }
             (Setting::OpenConfigFile, _) => {
                 if let Some(path) = self.settings.path() {

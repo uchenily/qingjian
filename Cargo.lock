@@ -2181,7 +2181,6 @@ dependencies = [
  "qingjian-lm",
  "qingjian-neural",
  "qingjian-platform",
- "qingjian-predict",
  "qingjian-translate",
  "serde",
  "serde_json",
@@ -2285,7 +2284,6 @@ dependencies = [
  "qingjian-learning",
  "qingjian-lm",
  "qingjian-platform",
- "qingjian-predict",
  "qingjian-translate",
  "thiserror 2.0.20",
  "tracing",
@@ -2321,7 +2319,6 @@ dependencies = [
  "qingjian-lm",
  "qingjian-neural",
  "qingjian-platform",
- "qingjian-predict",
  "qingjian-translate",
  "thiserror 2.0.20",
  "toml_edit",
@@ -2350,28 +2347,12 @@ version = "0.1.1"
 dependencies = [
  "qingjian-core",
  "qingjian-dictionary",
- "qingjian-predict",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
  "toml",
  "toml_edit",
  "tracing",
-]
-
-[[package]]
-name = "qingjian-predict"
-version = "0.1.1"
-dependencies = [
- "async-openai",
- "qingjian-core",
- "reqwest",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "tokio",
- "tracing",
- "uuid",
 ]
 
 [[package]]
@@ -2397,7 +2378,6 @@ dependencies = [
  "qingjian-lm",
  "qingjian-neural",
  "qingjian-platform",
- "qingjian-predict",
  "qingjian-translate",
  "thiserror 2.0.20",
  "toml_edit",
@@ -2417,7 +2397,6 @@ dependencies = [
  "qingjian-core",
  "qingjian-learning",
  "qingjian-platform",
- "qingjian-predict",
  "qingjian-translate",
  "rfd",
  "toml_edit",
@@ -3447,17 +3426,6 @@ name = "utf8parse"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
-
-[[package]]
-name = "uuid"
-version = "1.26.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ef6dac1e96601b4fb3acccccff2139741fcb757cb9a36089bf5be91cfb285ce"
-dependencies = [
- "getrandom 0.4.3",
- "js-sys",
- "wasm-bindgen",
-]
 
 [[package]]
 name = "valuable"

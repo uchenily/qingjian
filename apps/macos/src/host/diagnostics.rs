@@ -53,15 +53,7 @@ impl Host {
             vocabulary.familiar,
             vocabulary.committed
         );
-        let _ = writeln!(
-            out,
-            "云联想：{}",
-            if self.engine.prediction_enabled() {
-                "开"
-            } else {
-                "关"
-            }
-        );
+        let _ = writeln!(out, "本地整句模型：{}", if self.engine.has_sentence_scorer() { "开" } else { "关" });
         if let Some(error) = self.settings.error() {
             let _ = writeln!(out, "配置错误：{error}");
         }
@@ -149,7 +141,7 @@ mod tests {
     #[test]
     fn redaction_hides_key_values_only() {
         let text =
-            "[predict]\napi_key = \"sk-secret\"\napi_key_env = \"QINGJIAN_API_KEY\"\nmodel = \"x\"";
+            "[secret]\napi_key = \"sk-secret\"\napi_key_env = \"QINGJIAN_API_KEY\"\nmodel = \"x\"";
         let redacted = super::redact_secrets(text);
         assert!(!redacted.contains("sk-secret"));
         assert!(redacted.contains("api_key_env = \"QINGJIAN_API_KEY\""));

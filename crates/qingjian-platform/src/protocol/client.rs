@@ -38,9 +38,7 @@ pub enum ClientMessage {
         session: SessionId,
     },
 
-    /// 组句期间 DLL 定时轮询：取云联想的异步结果（云端候选 / 整句补全）。Server 拉一次
-    /// `poll_prediction`，把最新组句状态经 [`super::ServerMessage::Update`] 回给 DLL。传输仍是一问一答，
-    /// 云结果靠 DLL 侧定时器拉取，不需要 Server 主动推。
+    /// 组句期间 DLL 定时轮询：取最新组句状态经 [`super::ServerMessage::Update`] 回给 DLL。
     Poll {
         /// 会话标识。
         session: SessionId,
@@ -57,7 +55,7 @@ pub enum ClientMessage {
     },
 
     /// 输入框私密与否变了（DLL 起组句时按输入范围判：`IS_PRIVATE` / 密码 / PIN 类算私密，浏览器无痕窗口就是它）。
-    /// Server 让 Engine 进 / 出私密：不学习、不记输入日志、不发云端；前文 DLL 侧就不读。只在与上次报的不同时发，不回话。
+    /// Server 让 Engine 进 / 出私密：不学习、不记输入日志；前文 DLL 侧就不读。只在与上次报的不同时发，不回话。
     /// 真正的密码框（`KEYBOARD_DISABLED` compartment）DLL 直接放行所有键、不组句，到不了这里。
     Privacy {
         /// 会话标识。
@@ -65,22 +63,6 @@ pub enum ClientMessage {
 
         /// 现在是私密输入。
         private: bool,
-    },
-
-    /// 回应 [`super::ServerMessage::RequestSelection`]：应用当前选中的文字（供「翻译选中文字」）。
-    /// DLL 在读编辑会话里用 `GetSelection` + `GetText` 取；没有选区 / 读不到时 `text` 为空串。
-    Selection {
-        /// 会话标识。
-        session: SessionId,
-
-        /// 请求标识，对上是哪一次 [`super::ServerMessage::RequestSelection`]。
-        request: u64,
-
-        /// 选中的文字；没有选区时为空串。
-        text: String,
-
-        /// 选区的屏幕矩形（拿翻译候选窗口摆在它下方，与组句候选窗一致）；取不到是鼠标处近似。
-        rect: ScreenRect,
     },
 
     /// 组句更新后，DLL 在编辑会话里量到组句范围的屏幕矩形，发来让 Server 把候选窗口摆到光标下方。

@@ -1,4 +1,4 @@
-//! 缓冲区与模式：按键进出、光标移动、表达式 / 英文直输 / 问字等模式判断、标点与上屏链。
+//! 缓冲区与模式：按键进出、光标移动、表达式 / 英文直输等模式判断、标点与上屏链。
 
 use super::*;
 
@@ -178,7 +178,7 @@ impl Engine {
         let cursor = self.composition.cursor();
         let before = &self.composition.text()[..cursor];
         let plain =
-            self.raw_mode() || self.expression_mode() || self.question_mode() || self.zhuyin;
+            self.raw_mode() || self.expression_mode() || self.zhuyin;
         let len = unit_len_before(before, self.shuangpin.is_some(), plain);
         self.composition.delete_before_cursor(len)
     }
@@ -188,7 +188,7 @@ impl Engine {
         let cursor = self.composition.cursor();
         let before = &self.composition.text()[..cursor];
         let plain =
-            self.raw_mode() || self.expression_mode() || self.question_mode() || self.zhuyin;
+            self.raw_mode() || self.expression_mode() || self.zhuyin;
         let len = unit_len_before(before, self.shuangpin.is_some(), plain);
         len > 0 && (0..len).all(|_| self.composition.move_left())
     }
@@ -198,7 +198,7 @@ impl Engine {
         let cursor = self.composition.cursor();
         let after = &self.composition.text()[cursor..];
         let plain =
-            self.raw_mode() || self.expression_mode() || self.question_mode() || self.zhuyin;
+            self.raw_mode() || self.expression_mode() || self.zhuyin;
         let len = unit_len_after(after, self.shuangpin.is_some(), plain);
         len > 0 && (0..len).all(|_| self.composition.move_right())
     }
@@ -243,41 +243,6 @@ impl Engine {
             self.shuangpin,
             self.zhuyin,
         )
-    }
-
-    /// 是否处在问字模式（缓冲区以问字键、缺省 `u`，或 `?` 开头）：拼音问题由云端答，十六进制码点本地答。
-    pub fn question_mode(&self) -> bool {
-        !self.has_custom_phrase()
-            && self
-                .modes()
-                .is_question(self.composition.text(), self.zhuyin)
-    }
-
-    /// 问字模式下正在敲的还可能是 Unicode 码点（前缀后为空，或到目前为止全是十六进制 / 开头 `+`）：
-    /// 此时壳应把数字交给 [`Self::push`] 而不是当选词键。
-    pub fn unicode_entry(&self) -> bool {
-        let text = self.composition.text();
-        self.modes().is_question(text, self.zhuyin)
-            && shortcut::could_be_unicode(self.modes().question_body(text, self.zhuyin))
-    }
-
-    /// 缓冲区里只有一个 `?`：还没决定是问字还是标点。壳在确认标点时调用 [`Self::restore_bare_question`]。
-    pub fn bare_question(&self) -> bool {
-        self.composition.text() == QUESTION_PREFIX.to_string()
-    }
-
-    /// 确认单独的问号并清空缓冲区；中文遵循标点设置，英文原样输出。
-    /// 不是单独的问号时返回 `None`，不改变组句；壳负责取消联想界面并插入返回的文本。
-    pub fn restore_bare_question(&mut self, english: bool) -> Option<String> {
-        if !self.bare_question() {
-            return None;
-        }
-        self.clear();
-        if !english && let Some(mark) = self.punctuate(QUESTION_PREFIX) {
-            return Some(mark.to_owned());
-        }
-        self.note_passthrough(QUESTION_PREFIX);
-        Some(QUESTION_PREFIX.to_string())
     }
 
     /// 用一段完整拼音替换当前缓冲区，供 CLI 和测试一次性喂入。

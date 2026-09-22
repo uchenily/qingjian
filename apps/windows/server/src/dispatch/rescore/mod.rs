@@ -156,7 +156,7 @@ impl Router {
 
     /// 防抖到点就发请求；在等结果就收一次，收到了重查并重画当前页。
     fn advance_rescoring(&mut self) {
-        if self.engine.composition().is_empty() || self.translation.is_some() {
+        if self.engine.composition().is_empty() {
             self.rescore.stop();
             return;
         }
@@ -198,15 +198,10 @@ impl Router {
         else {
             return;
         };
-        let cloud = layout.cloud().to_vec();
-        let mut rebuilt = CandidateLayout::new(
+        let rebuilt = CandidateLayout::new(
             query.candidates.items.clone(),
             self.config.page_size,
-            self.config.cloud_slots,
         );
-        if !cloud.is_empty() {
-            rebuilt.set_cloud(cloud);
-        }
         *layout = rebuilt;
         *preedit = query.marked_segments().iter().map(Into::into).collect();
         *cursor = query.marked_cursor();

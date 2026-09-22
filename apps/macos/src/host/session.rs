@@ -2,7 +2,7 @@
 //!
 //! 放在 Host 里而不是控制器的 ivars 里，是因为联想结果由定时器送达，那时手上没有控制器；
 //! 反正 Engine 的缓冲区也是全进程一份，会话状态跟着它走。
-//! 候选的分页与云端词的位置由 Core 的 [`CandidateLayout`] 定，这里只管高亮与页码。
+//! 候选的分页与高亮位置由 Core 的 [`CandidateLayout`] 定，这里只管高亮与页码。
 
 use qingjian_core::{Candidate, CandidateLayout, Cell};
 
@@ -10,7 +10,7 @@ use crate::candidates::Preedit;
 
 #[derive(Debug, Default)]
 pub struct Session {
-    /// 上一次查询的候选排布（本地候选 + 云端词）。
+    /// 上一次查询的候选排布。
     pub layout: CandidateLayout,
 
     /// 高亮的格子下标（在整个排布里的绝对位置）。
@@ -33,10 +33,9 @@ impl Session {
         preedit: Option<Preedit>,
         candidates: Vec<Candidate>,
         page_size: usize,
-        slots: usize,
     ) {
         self.preedit = preedit;
-        self.layout = CandidateLayout::new(candidates, page_size, slots);
+        self.layout = CandidateLayout::new(candidates, page_size);
         self.highlighted = (0..self.layout.len())
             .find(|&i| self.layout.candidate(i).is_some())
             .unwrap_or(0);
@@ -136,7 +135,7 @@ mod tests {
     #[test]
     fn digits_map_to_cells_on_the_current_page() {
         let mut session = Session::default();
-        session.reset(None, candidates(3), 9, 2);
+        session.reset(None, candidates(3), 9);
         assert_eq!(session.index_on_page(2), Some(2));
         assert_eq!(session.index_on_page(3), None);
         assert!(session.move_highlight(1));
@@ -148,7 +147,7 @@ mod tests {
     #[test]
     fn paging_follows_the_layout() {
         let mut session = Session::default();
-        session.reset(None, candidates(12), 9, 2);
+        session.reset(None, candidates(12), 9);
         assert_eq!(session.pages(), 2);
         assert!(session.turn_page(1));
         assert_eq!(session.highlighted, 9);
@@ -159,19 +158,19 @@ mod tests {
     #[test]
     fn navigation_is_remembered_until_the_next_query() {
         let mut session = Session::default();
-        session.reset(None, candidates(12), 9, 2);
+        session.reset(None, candidates(12), 9);
         assert!(!session.navigated);
         // 顶到边界没动算没导航
         assert!(!session.move_highlight(-1));
         assert!(!session.navigated);
         assert!(session.move_highlight(1));
         assert!(session.navigated);
-        session.reset(None, candidates(3), 9, 2);
+        session.reset(None, candidates(3), 9);
         assert!(!session.navigated);
         // 只有一页时翻页没动，也不算导航
         assert!(!session.turn_page(1));
         assert!(!session.navigated);
-        session.reset(None, candidates(12), 9, 2);
+        session.reset(None, candidates(12), 9);
         assert!(session.turn_page(1));
         assert!(session.navigated);
     }
@@ -181,11 +180,11 @@ mod tests {
         let mut words = candidates(1);
         words[0].kind = CandidateKind::Custom(9);
         let mut session = Session::default();
-        session.reset(None, words.clone(), 5, 2);
+        session.reset(None, words.clone(), 5);
         assert_eq!((session.page, session.highlighted), (1, 8));
         assert!(!session.turn_page(-1));
         words.extend(candidates(1));
-        session.reset(None, words, 5, 2);
+        session.reset(None, words, 5);
         assert_eq!((session.page, session.highlighted), (0, 0));
         assert!(session.turn_page(1));
         assert_eq!((session.page, session.highlighted), (1, 8));

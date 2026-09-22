@@ -14,7 +14,6 @@ pub const STYLE_REST: u8 = 2;
 pub const KIND_CHINESE: u8 = 0;
 pub const KIND_SENTENCE: u8 = 1;
 pub const KIND_ENGLISH: u8 = 2;
-pub const KIND_CLOUD: u8 = 3;
 pub const KIND_SHORTCUT: u8 = 4;
 pub const KIND_EMOJI: u8 = 5;
 pub const KIND_CUSTOM: u8 = 6;
@@ -49,7 +48,6 @@ impl Session {
         cursor: usize,
         candidates: Vec<Candidate>,
         page_size: usize,
-        slots: usize,
     ) {
         self.preedit = segments
             .iter()
@@ -57,7 +55,7 @@ impl Session {
             .map(|s| (s.text.clone(), style_of(s.kind)))
             .collect();
         self.cursor = cursor;
-        self.layout = CandidateLayout::new(candidates, page_size, slots);
+        self.layout = CandidateLayout::new(candidates, page_size);
         self.highlighted = (0..self.layout.len())
             .find(|&i| self.layout.candidate(i).is_some())
             .unwrap_or(0);
@@ -66,14 +64,14 @@ impl Session {
     }
 
     /// 查询失败时退回显示原始字母。
-    pub fn reset_plain(&mut self, text: &str, cursor: usize, page_size: usize, slots: usize) {
+    pub fn reset_plain(&mut self, text: &str, cursor: usize, page_size: usize) {
         self.preedit = if text.is_empty() {
             Vec::new()
         } else {
             vec![(text.to_owned(), STYLE_TYPED)]
         };
         self.cursor = cursor;
-        self.layout = CandidateLayout::new(Vec::new(), page_size, slots);
+        self.layout = CandidateLayout::new(Vec::new(), page_size);
         self.highlighted = 0;
         self.page = 0;
         self.navigated = false;
@@ -195,42 +193,10 @@ impl Session {
         self.layout.page_size()
     }
 
-    /// 云端词补进第一页末尾几格（前面的本地候选不动）。返回填了几格。
-    pub fn set_cloud(&mut self, words: Vec<qingjian_core::Candidate>) -> usize {
-        self.layout.set_cloud(words)
-    }
-
-    /// 本地候选（不含云端词）。
+    /// 本地候选。
     #[allow(dead_code)]
     pub fn local(&self) -> &[qingjian_core::Candidate] {
         self.layout.local()
-    }
-
-    /// 排布总容量（本地 + 云端格）。
-    #[allow(dead_code)]
-    pub fn capacity(&self) -> usize {
-        self.layout.capacity()
-    }
-
-    /// 云端词到了还能不能补进第一页：用户还在第一页，且高亮没落在会被云端词顶掉的那几格上。
-    pub fn cloud_slots_untouched(&self) -> bool {
-        let layout = &self.layout;
-        let page = self.page;
-        let highlighted = self.highlighted;
-        let local_empty = layout.local().is_empty();
-        let page_size = layout.page_size();
-        let capacity = layout.capacity();
-        // 没有本地候选（问字模式）时整页都是云端的，谈不上挪走谁，永远能补
-        if local_empty {
-            return true;
-        }
-        if page != 0 {
-            return false;
-        }
-        // 云端词填的是第一页末尾 (page_size - slots) .. page_size 这几格
-        let slots = page_size.saturating_sub(capacity);
-        let cloud_start = page_size - slots;
-        highlighted < cloud_start
     }
 }
 
@@ -250,7 +216,6 @@ pub fn kind_of(kind: qingjian_core::CandidateKind) -> u8 {
         CandidateKind::Chinese => KIND_CHINESE,
         CandidateKind::Sentence => KIND_SENTENCE,
         CandidateKind::English => KIND_ENGLISH,
-        CandidateKind::Cloud => KIND_CLOUD,
         CandidateKind::Shortcut => KIND_SHORTCUT,
         CandidateKind::Emoji => KIND_EMOJI,
         CandidateKind::Custom(_) => KIND_CUSTOM,

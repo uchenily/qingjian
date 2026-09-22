@@ -5,8 +5,6 @@
 //! 配置只有一条通路：[`Host::apply_config`] 把当前 `Config` 推给 Engine 与界面。启动、菜单开关、
 //! 设置窗口、手改文件被监视到，全都走它；三个入口都只写 `config.toml`，不各存一套状态。
 
-mod cloud;
-mod cloud_test_monitor;
 mod config;
 mod config_watch;
 mod diagnostics;
@@ -15,12 +13,10 @@ mod dictionary_info;
 mod init;
 mod model;
 mod notice;
-mod predict_monitor;
 mod presenting;
 mod rescore_monitor;
 mod session;
 mod settings;
-mod translation_job;
 
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -29,19 +25,16 @@ use objc2::MainThreadMarker;
 use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
 use objc2_foundation::{NSProcessInfo, NSRect, NSString};
 use qingjian_core::{
-    Candidate, CandidateKind, Cell, CloudWord, EmojiTable, Engine, FuzzyRules, Language, ModeKeys,
-    NoGlossFiller, NoInputLogger, NoPredictor, Prediction, ShuangpinScheme,
+    Candidate, CandidateKind, Cell, EmojiTable, Engine, FuzzyRules, Language, ModeKeys,
+    NoInputLogger, ShuangpinScheme,
 };
 use qingjian_dictionary::{Dictionary, WordList};
 use qingjian_learning::{FrequencyLearner, InputLog, UsageStats, VocabularyBook};
 use qingjian_lm::BigramModel;
 use qingjian_platform::extra_dictionaries;
 use qingjian_platform::{
-    DictionariesConfig, KeyCombo, LayoutMode, LocalModelConfig, LogLevel, Modifiers,
-    PAGE_KEY_OPTIONS, PreeditMode, ShortcutConfig, ThemeMode,
-};
-use qingjian_predict::{
-    CloudGlossFiller, CloudPredictor, ConnectionTest, PredictConfig, PredictError,
+    DictionariesConfig, LayoutMode, LocalModelConfig, LogLevel, Modifiers, PAGE_KEY_OPTIONS,
+    PreeditMode, ShortcutConfig, ThemeMode,
 };
 use qingjian_translate::{Glossary, LayeredTranslator, LevelTable, PersonalGlossary};
 
@@ -52,14 +45,11 @@ use crate::error::HostError;
 use crate::menubar::{InputMenu, MenuAction, ModeIndicator};
 use crate::preferences::{PreferencesWindow, Setting, SettingValue};
 
-use cloud_test_monitor::CloudTestMonitor;
 use config_watch::ConfigWatch;
 pub use dictionary_info::DictionaryInfo;
 pub use init::init;
-use predict_monitor::PredictMonitor;
 use rescore_monitor::RescoreMonitor;
 pub use session::Session;
-pub use translation_job::TranslationJob;
 
 pub struct Host {
     /// 输入内核。平台层只能通过它的公开 API 拿候选，不允许碰词库或排序。
@@ -86,9 +76,6 @@ pub struct Host {
     /// 上次把学习数据落盘的时间；激活期间的定时器按 [`LEARNING_FLUSH_INTERVAL`] 再刷一次。
     pub last_flush: std::time::Instant,
 
-    /// 当前 Predictor 是按哪份 `[predict]` 建的；配置没变就不重建（重建会起新线程、丢缓存）。
-    applied_predict: PredictConfig,
-
     /// 附加词库是按哪份 `[dictionaries]` 装的；开关变了才重新加载。
     applied_dictionaries: DictionariesConfig,
 
@@ -110,9 +97,6 @@ pub struct Host {
     /// 每页候选数（配置 `[general] page_size`，已夹到 1–9）。
     pub page_size: usize,
 
-    /// 候选窗口第一页末尾留给云端词的格数（配置 `[predict] slots`）。
-    pub cloud_slots: usize,
-
     /// 翻页键对（上一页、下一页）。
     pub page_keys: (char, char),
 
@@ -128,26 +112,11 @@ pub struct Host {
     /// 输入日志是否在记（配置 `[general] input_log`），换了才重开文件。
     input_log_enabled: Option<bool>,
 
-    /// 翻译选中文字的快捷键（配置 `[shortcut] translate_selection`）。
-    pub translate_keys: KeyCombo,
-
-    /// 进行中的「翻译选中文字」；有它时候选窗口显示的是译文（或「翻译中…」），按键先归它处理。
-    pub translation: Option<TranslationJob>,
-
     /// 正在显示的提示（候选窗口里一行字，几秒后自动收）。
     pub notice: Option<notice::Notice>,
 
     /// 组句中的拼音显示在行内、候选窗口还是两处。
     pub preedit_mode: PreeditMode,
-
-    /// 联想结果轮询定时器。
-    pub monitor: PredictMonitor,
-
-    /// 进行中的云服务连通性测试（「云服务」页「测试连接」按钮）；没在测为 `None`。
-    cloud_test: Option<ConnectionTest>,
-
-    /// 连通性测试的轮询定时器。
-    cloud_test_monitor: CloudTestMonitor,
 
     /// 本地整句模型的防抖与轮询定时器。
     rescore: RescoreMonitor,
@@ -165,10 +134,7 @@ pub struct Host {
     /// 当前会话的候选、高亮、页码、preedit。
     pub session: Session,
 
-    /// 组句中到达的整句补全，Tab 接受。
-    pub sentence: Option<String>,
-
-    /// 最近一次绘制时的光标矩形，联想结果到达后在同一位置重画。
+    /// 最近一次绘制时的光标矩形，本地整句模型结果到达后在同一位置重画。
     pub anchor: NSRect,
 }
 

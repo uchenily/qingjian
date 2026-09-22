@@ -30,7 +30,7 @@ struct QingjianPreeditSegment {
 };
 
 /// 候选窗里的一格。与 Rust CandidateView 对齐。
-/// kind: 0=中文, 1=整句, 2=英文, 3=云端, 4=快捷, 5=emoji, 6=自定义。
+/// kind: 0=中文, 1=整句, 2=英文, 4=快捷, 5=emoji, 6=自定义。
 struct QingjianCandidateView {
     const char* text;
     const char* translation;
@@ -68,8 +68,6 @@ struct QingjianFrame {
     uint8_t theme;
     // 注意：Rust 侧 layout+theme 是两个 u8，后面有填充到指针对齐。这里保持字段顺序即可。
 
-    /// 整句补全（preedit 右侧，Tab 上屏）；空指针表示无。
-    const char* sentence;
     /// 屏幕提示（删候选后的「已删除…」）；空指针表示无。
     const char* notice;
 };

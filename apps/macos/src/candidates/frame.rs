@@ -1,4 +1,4 @@
-//! 候选窗口一次绘制的全部内容。窗口记住上一帧，联想结果到了只改一处再重画。
+//! 候选窗口一次绘制的全部内容。窗口记住上一帧，本地整句模型结果到了只改一处再重画。
 
 use super::preedit::Preedit;
 use super::row::Row;
@@ -17,10 +17,7 @@ pub struct Frame {
     /// 右下角页码。
     pub footer: Option<String>,
 
-    /// 拼音行右侧的整句补全（云联想），组句时才有。
-    pub sentence: Option<String>,
-
-    /// 拼音行右侧的一句临时状态（删了什么词），有它时不画整句补全。
+    /// 拼音行右侧的一句临时状态（删了什么词）。
     pub status: Option<String>,
 }
 
@@ -34,11 +31,8 @@ impl Frame {
         self.preedit.is_some() || self.trailing().is_some()
     }
 
-    /// 拼音行右侧画什么：状态优先，其次整句补全；`bool` 是要不要带云朵。
-    pub fn trailing(&self) -> Option<(&str, bool)> {
-        self.status
-            .as_deref()
-            .map(|s| (s, false))
-            .or_else(|| self.sentence.as_deref().map(|s| (s, true)))
+    /// 拼音行右侧画什么：只有状态。
+    pub fn trailing(&self) -> Option<&str> {
+        self.status.as_deref()
     }
 }

@@ -9,7 +9,7 @@ use objc2::{define_class, msg_send, sel};
 use objc2_app_kit::{NSEvent, NSEventModifierFlags, NSEventType, NSMenu};
 use objc2_foundation::NSObjectProtocol;
 use objc2_input_method_kit::{IMKInputController, IMKServer};
-use qingjian_core::{Candidate, QUESTION_PREFIX};
+use qingjian_core;
 use qingjian_platform::Modifiers;
 
 use super::{TextClient, catch_panic, modifiers, recover_from_panic, secure_input};
@@ -71,7 +71,6 @@ define_class!(
                     self.commit_raw(client);
                 }
                 host::with(|h| {
-                    h.cancel_prediction();
                     h.window.hide();
                 });
             });
@@ -125,7 +124,6 @@ define_class!(
                 }
                 // 切换输入源时无论如何都收掉候选框，不能留一个孤儿窗口在屏幕上
                 host::with(|h| {
-                    h.cancel_prediction();
                     h.window.hide();
                     h.indicator.deactivate();
                     h.watch.stop();
@@ -150,9 +148,6 @@ define_class!(
 );
 
 /// 数字行与小键盘的键码对应的数字 1–9（ANSI 布局的物理键）。
-/// 翻译选中文字最多接受多少个字符：再长既慢又贵，也不是输入法该干的事。
-const MAX_TRANSLATE_CHARS: usize = 500;
-
 /// 给本地整句模型看的光标前文最多读多少字符（Engine 自己再按它的前文长度截）。
 const RESCORE_LOOKBACK: usize = qingjian_core::RESCORE_CONTEXT_CHARS;
 
@@ -193,21 +188,6 @@ impl QingjianInputController {
         };
         // 提示在显示：敲任何键先收掉，键照常处理
         host::with(|h| h.clear_notice());
-        // 翻译选中文字进行中：回车 / 空格 / 1 接受，Esc 放弃，其他键放弃后照常交给应用
-        if host::with(|h| h.translation.is_some()).unwrap_or(false) {
-            return self.handle_translation_review(key, client);
-        }
-        // 翻译快捷键（不在组句中）：读应用里的选区，交给云端
-        let typed = event
-            .charactersIgnoringModifiers()
-            .map(|c| c.to_string().to_ascii_lowercase());
-        let combo = host::with(|h| h.translate_keys).unwrap_or_default();
-        if pressed == combo.modifiers
-            && typed.as_deref().and_then(|t| t.chars().next()) == Some(combo.key)
-            && !host::with(|h| !h.engine.composition().is_empty()).unwrap_or(false)
-        {
-            return self.translate_selection(client);
-        }
         // 修饰键 + 数字：按配置的两组组合上屏第一 / 第二个译词（缺省 ⌥ 与 ⇧⌥）、删候选（缺省 ⇧）。
         // 只在组句中认：不在组句时 ⇧4 就是 `$`，得走下面的标点转换（中文模式出 ￥、⇧6 出 ……、⇧1 出 ！），
         // 以前在这里被截走后原样还给应用，全角转换就没机会做了。
@@ -262,73 +242,6 @@ impl QingjianInputController {
         match event.characters() {
             Some(text) if !text.is_empty() => self.handle_text(&text.to_string(), client),
             _ => false,
-        }
-    }
-
-    /// Option+数字：上屏当前页第几个候选的译文（学习和拼音消耗与选那个候选一样）。
-    /// 不在组句中时不管；候选没有译文就吞掉按键不动，免得 ¡™£ 进应用。
-    /// 翻译应用里选中的文字：云服务关着、密码框、没有选区都不动（键交回应用）。
-    fn translate_selection(&self, client: TextClient<'_>) -> bool {
-        if !host::with(|h| h.engine.prediction_enabled()).unwrap_or(false) {
-            tracing::info!("云服务没开，翻译快捷键不生效");
-            return false;
-        }
-        if secure_input::enabled() {
-            tracing::debug!("Secure Input 中，不翻译");
-            return false;
-        }
-        let Some((text, range)) = client.selected_text(MAX_TRANSLATE_CHARS) else {
-            // 分不清是没选还是应用不给读（不少 Electron 应用不支持），两种情况都提示一下，键吞掉
-            tracing::debug!("没有选中的文字，或应用不支持读选区");
-            let anchor = client.caret_rect();
-            host::with(|h| {
-                h.show_notice(
-                    "没有选中的文字，或这个应用不支持读取选区（最多 500 字）",
-                    anchor,
-                )
-            });
-            return true;
-        };
-        // 光标位置先在借用之外取好：取的过程会等应用回话，期间别的 IMK 回调可能重入
-        let anchor = client.caret_rect();
-        let sent = host::with(|h| {
-            h.anchor = anchor;
-            h.engine.request_translation(&text).is_some()
-        })
-        .unwrap_or(false);
-        if !sent {
-            return false;
-        }
-        tracing::debug!(chars = text.chars().count(), "翻译选中文字");
-        host::with(|h| h.begin_translation(range));
-        true
-    }
-
-    /// 翻译窗口开着时的按键：回车 / 空格 / 1 用译文替换选区，Esc 放弃；其他键放弃并交回应用。
-    fn handle_translation_review(&self, key: u16, client: TextClient<'_>) -> bool {
-        let job = host::with(|h| h.translation.clone()).flatten();
-        let Some(job) = job else {
-            return false;
-        };
-        match key {
-            // 回车 / 小键盘回车 / 空格 / 1：接受（译文还没到时先等）
-            36 | 76 | 49 | 18 => {
-                if let Some(result) = job.result {
-                    tracing::debug!("接受译文");
-                    client.replace_range(&result, job.range);
-                    host::with(|h| h.end_translation());
-                }
-                true
-            }
-            // Esc：放弃
-            53 => {
-                host::with(|h| h.end_translation());
-                true
-            }
-            _ => {
-                host::with(|h| h.end_translation());
-                false
-            }
         }
     }
 
@@ -406,13 +319,8 @@ impl QingjianInputController {
             host::with(|h| h.engine.note_passthrough(c));
             return false;
         }
-        // 缓冲区为空时敲 ? 先进问字模式
-        if !composing && c == QUESTION_PREFIX {
-            host::with(|h| h.engine.push(c));
-            self.refresh(client);
-            return true;
-        }
-        let question = composing && host::with(|h| h.engine.question_mode()).unwrap_or(false);
+        // 缓冲区为空时不再进问字模式（已移除）
+        let question = false;
         host::with(|h| h.engine.set_english_mode(false));
         // 表达式模式（v 开头）：数字与运算符进缓冲区，不当选词 / 翻页键
         let expression = composing && host::with(|h| h.engine.expression_mode()).unwrap_or(false);
@@ -420,8 +328,6 @@ impl QingjianInputController {
         let raw = composing && host::with(|h| h.engine.raw_mode()).unwrap_or(false);
         // 组句中敲 `-`：进入英文直输段（`no-way`），不再当翻页键；翻页键见配置 `[general] page_keys`
         let hyphen = composing && !question && c == '-';
-        // 问字模式下敲的还可能是码点（`u4e00`、`u+1f600`）：数字与 `+` 进缓冲区而不是选词
-        let unicode = question && host::with(|h| h.engine.unicode_entry()).unwrap_or(false);
         // 微软 / 搜狗双拼的 `;` 是 ing 键：末尾有落单声母时进缓冲区，其他时候还是标点
         let semicolon =
             composing && c == ';' && host::with(|h| h.engine.takes_semicolon()).unwrap_or(false);
@@ -440,7 +346,6 @@ impl QingjianInputController {
             || semicolon
             || (expression && qingjian_core::shortcut::is_expression_char(c))
             || (raw && c.is_ascii_graphic())
-            || (unicode && (c.is_ascii_digit() || c == '+'))
             || hyphen
             || punctuation
         {
@@ -453,13 +358,6 @@ impl QingjianInputController {
             self.commit_highlighted(client);
             host::with(|h| h.engine.note_passthrough(c));
             return false;
-        }
-        if composing && self.restore_bare_question(client) {
-            // 空格只是「把这个 ? 上屏」，不再多打一个空格；其他键按非组句状态继续处理
-            if c == ' ' {
-                return true;
-            }
-            return self.handle_text(text, client);
         }
         // 组句中的大写字母进缓冲区（中英混输，`woxiangxueRust` → 我想学Rust）；
         // 没在组句时临时打英文，直接放行
@@ -543,27 +441,19 @@ impl QingjianInputController {
             // ⌘⌫：删光标前的全部拼音
             host::with(|h| h.engine.delete_to_start());
             self.refresh(client);
-        } else if selector != sel!(cancelOperation:)
-            && selector != sel!(complete:)
-            && self.restore_bare_question(client)
-        {
-            // 只有一个 ? 时按了回车：回车就是「把这个 ? 上屏」，吞掉，否则聊天框里会连消息一起发出去；
-            // 方向键等其他键还原后交给应用
-            return selector == sel!(insertNewline:);
         } else if selector == sel!(insertNewline:) {
             self.commit_raw(client);
         } else if selector == sel!(cancelOperation:) || selector == sel!(complete:) {
             // TextEdit 等应用把 Esc 绑成 complete:（自动补全），也当作取消
             host::with(|h| {
                 h.engine.clear();
-                h.cancel_prediction();
             });
             self.refresh(client);
         } else if selector == sel!(insertTab:) {
-            // 英文模式 Tab 选中高亮的词；中文模式有整句补全时接受它，否则翻页
+            // 英文模式 Tab 选中高亮的词；中文模式没有整句补全，翻页
             if host::with(|h| h.engine.english_mode()).unwrap_or(false) {
                 self.commit_highlighted(client);
-            } else if !self.accept_sentence(client) {
+            } else {
                 self.turn_page(1, client);
             }
         } else if selector == sel!(deleteForward:) {
@@ -608,7 +498,7 @@ impl QingjianInputController {
     /// 按当前缓冲区重新查候选、更新 marked text，回到第一页并重画候选窗口。
     fn refresh(&self, client: TextClient<'_>) {
         // 本地整句模型要看光标前文：一段组句只在第一键读一次（组句中它不变；应用偶尔不回话也不至于让前文来回换），
-        // 读应用文本要等应用回话，放在借 Host 之外（见 request_prediction）
+        // 读应用文本要等应用回话，放在借 Host 之外
         let wants_context = host::with(|h| {
             h.attach_loaded_model();
             h.engine.has_sentence_scorer() && h.engine.composition().text().chars().count() == 1
@@ -654,30 +544,8 @@ impl QingjianInputController {
         } else {
             client.set_marked_text("", 0);
         }
-        // 先发联想再画：发出去就留好云端槽位，画出来的第一帧本地候选就已经在最终位置
-        if !marked.is_empty() {
-            let candidates = host::with(|h| h.session.layout.local().to_vec()).unwrap_or_default();
-            self.request_prediction(client, &candidates);
-        }
+        // 本地整句模型的重排由定时器驱动，这里只画当前帧
         self.render(client);
-    }
-
-    /// 缓冲区里只有一个 `?` 而用户按了别的键：把它还原成问号上屏（中文遵循标点设置、英文半角）、清空缓冲区。
-    /// 返回是否发生了还原。
-    fn restore_bare_question(&self, client: TextClient<'_>) -> bool {
-        let english = modifiers::caps_lock_on();
-        let restored = host::with(|h| {
-            let mark = h.engine.restore_bare_question(english)?;
-            h.cancel_prediction();
-            Some(mark)
-        })
-        .flatten();
-        let Some(mark) = restored else {
-            return false;
-        };
-        client.insert_text(&mark);
-        self.refresh(client);
-        true
     }
 
     /// 记下光标位置并按会话状态重画候选窗口。
@@ -687,52 +555,6 @@ impl QingjianInputController {
             h.anchor = anchor;
             h.render();
         });
-    }
-
-    /// 发一次联想请求。Secure Input 里绝不发；没接联想器时是空操作。
-    ///
-    /// 读上下文要等应用回话，这段时间 IMK 可能把 `deactivateServer:` 之类的回调插进来，
-    /// 所以分两次借 Host：先拿策略、放开借用去读、再借回来发请求。
-    fn request_prediction(&self, client: TextClient<'_>, candidates: &[Candidate]) {
-        let policy = host::with(|h| {
-            if !h.engine.prediction_enabled() {
-                return None;
-            }
-            if secure_input::enabled() {
-                tracing::debug!("Secure Input 中，不联想");
-                h.cancel_prediction();
-                return None;
-            }
-            Some(h.engine.prediction_policy())
-        })
-        .flatten();
-        let Some(policy) = policy else {
-            return;
-        };
-        let surrounding = client.surrounding_text(policy.before, policy.after);
-        host::with(|h| {
-            tracing::debug!(
-                has_context = surrounding.is_some(),
-                pinyin = h.engine.composition().scope(),
-                "联想请求"
-            );
-            match h.engine.request_prediction(surrounding, candidates) {
-                Some(_) => h.await_prediction(),
-                None => h.cancel_prediction(),
-            }
-        });
-    }
-
-    /// 接受组句中的整句补全：作用域内的拼音作废，句子上屏。没有补全返回 false。
-    fn accept_sentence(&self, client: TextClient<'_>) -> bool {
-        let Some(text) = host::with(|h| h.sentence.take()).flatten() else {
-            return false;
-        };
-        host::with(|h| h.engine.accept_prediction(&text));
-        tracing::debug!(%text, "接受整句补全");
-        client.insert_text(&text);
-        self.refresh(client);
-        true
     }
 
     /// 高亮上下移动，越过页边自动翻页。

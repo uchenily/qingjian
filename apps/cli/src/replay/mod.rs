@@ -52,10 +52,6 @@ pub fn run(engine: &mut Engine, path: &Path, show_misses: usize) -> Result<Repor
                     engine.note_passthrough(c);
                 }
             }
-            InputLogEntry::Prediction { .. } => {
-                report.predictions += 1;
-                report.prediction_pending = true;
-            }
             InputLogEntry::Commit(commit) => {
                 // 2026-09-12 以前的日志里壳每次回车 / 失焦都记一条空的原样上屏，不算数
                 if commit.keys.is_empty() && commit.text.is_empty() {
@@ -64,14 +60,6 @@ pub fn run(engine: &mut Engine, path: &Path, show_misses: usize) -> Result<Repor
                     engine.clear();
                     engine.break_chain();
                     continue;
-                }
-                if std::mem::take(&mut report.prediction_pending)
-                    && matches!(
-                        commit.source,
-                        InputSource::Cloud | InputSource::CloudSentence
-                    )
-                {
-                    report.predictions_accepted += 1;
                 }
                 replay_commit(engine, &commit, &mut report, show_misses)
             }

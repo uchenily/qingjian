@@ -4,7 +4,7 @@
 //! fcitx5 送来的是 xkb keysym（`sym`）+ keycode + modifiers。字母数字与标点的 keysym 就是 ASCII；
 //! 功能键的 keysym 是 `XK_BackSpace` / `XK_Return` / `XK_Escape` / `XK_Tab` / 方向键等。
 
-use qingjian_core::{Engine, QUESTION_PREFIX, shortcut};
+use qingjian_core::{Engine, shortcut};
 use qingjian_platform::Modifiers;
 
 use super::{Dispatch, KeyOutcome, KeyResult};
@@ -81,41 +81,15 @@ pub fn apply(dispatch: &mut Dispatch, engine: &mut Engine, input: &KeyInput) -> 
     };
 
     // 组句中修饰键 + 数字是快捷键（上屏译词 / 删候选）；MVP 先只接数字选词，译词 / 删候选后续接
-    // 缓冲区为空时敲 ? 先进问字模式
-    if !composing && c == QUESTION_PREFIX {
-        engine.set_english_mode(false);
-        engine.push(c);
-        dispatch.refresh(engine);
-        return KeyOutcome::consumed(dispatch.current_frame(engine));
-    }
 
     // MVP 阶段先默认中文模式：不靠 Caps Lock 切中英（fcitx5 的 KeyState::CapsLock 行为与 macOS 不同，
     // 后续接 fcitx5 的中英切换机制或配置开关）。字母一律进拼音。
     let english = false;
-    let question = composing && engine.question_mode();
-    // 英文模式下问字：Caps 让字母以大写送来，按小写收进问题
-    let c = if question && english && c.is_ascii_uppercase() {
-        c.to_ascii_lowercase()
-    } else {
-        c
-    };
-
-    // 只有一个 ? 时敲了字母以外的键：还原成问号上屏
-    if question && !c.is_ascii_lowercase() && engine.bare_question() {
-        let mark = restore_bare_question(dispatch, engine, english);
-        if c == ' ' {
-            return KeyOutcome::committed(mark, dispatch.current_frame(engine));
-        }
-        // 还原后按非组句状态继续处理这个键
-        let prefix = mark;
-        let outcome = apply(dispatch, engine, &non_question_input(input));
-        return with_prefix(Some(prefix), outcome, c);
-    }
 
     engine.set_english_mode(false);
 
-    let effect = if english && !question {
-        apply_english(dispatch, engine, c, shift)
+    let effect = if english {
+        apply_english(engine, c, shift)
     } else {
         apply_chinese(dispatch, engine, c, shift)
     };
@@ -217,11 +191,6 @@ fn apply_function_key(
         return Some(KeyOutcome::passthrough());
     }
     // 只有一个 ? 时按了回车：吞掉（「把这个 ? 上屏」）
-    if engine.bare_question() && !matches!(sym, XK_BACKSPACE | XK_ESCAPE) {
-        let english = input.modifiers & MOD_CAPS != 0;
-        let mark = restore_bare_question(dispatch, engine, english);
-        return Some(KeyOutcome::committed(mark, dispatch.current_frame(engine)));
-    }
     let outcome = match sym {
         XK_BACKSPACE => {
             engine.backspace();
@@ -240,14 +209,8 @@ fn apply_function_key(
                 let text = commit_highlighted(dispatch, engine);
                 KeyOutcome::committed(text, frame_after(dispatch, engine))
             } else {
-                // 中文模式 Tab：有整句补全就接受，否则交还应用
-                match dispatch.take_sentence() {
-                    Some(sentence) => {
-                        let text = engine.accept_prediction(&sentence);
-                        KeyOutcome::committed(text, frame_after(dispatch, engine))
-                    }
-                    None => KeyOutcome::passthrough(),
-                }
+                // 中文模式 Tab：没有整句补全，交还应用
+                KeyOutcome::passthrough()
             }
         }
         XK_DOWN => {
@@ -328,7 +291,7 @@ fn apply_punctuation(engine: &mut Engine, c: char, _shift: bool) -> KeyOutcome {
 }
 
 /// 英文模式。开着候选：字母进缓冲区，空格 / 标点先把字母原样上屏；关着候选：字母由我们插入。
-fn apply_english(dispatch: &mut Dispatch, engine: &mut Engine, c: char, shift: bool) -> KeyOutcome {
+fn apply_english(engine: &mut Engine, c: char, shift: bool) -> KeyOutcome {
     let composing = !engine.composition().is_empty();
     let raw = composing
         .then(|| engine.take_raw())
@@ -356,7 +319,6 @@ fn apply_printable(
 ) -> KeyOutcome {
     let expression = engine.expression_mode();
     if (expression && shortcut::is_expression_char(c))
-        || (engine.unicode_entry() && (c.is_ascii_digit() || c == '+'))
         || (c == ';' && engine.takes_semicolon())
     {
         engine.push(c);
@@ -415,8 +377,8 @@ fn apply_printable(
         }
         return KeyOutcome::committed(text, frame_after(dispatch, engine));
     }
-    // 表达式 / 问字模式下的其他字符：先把高亮候选上屏，再按非组句处理
-    if c != '\'' && (expression || engine.question_mode()) {
+    // 表达式模式下的其他字符：先把高亮候选上屏，再按非组句处理
+    if c != '\'' && expression {
         let committed = commit_highlighted(dispatch, engine);
         let effect = apply_punctuation(engine, c, false);
         return with_prefix(Some(committed), effect, c);
@@ -468,13 +430,6 @@ fn commit_index(dispatch: &mut Dispatch, engine: &mut Engine, index: usize) -> S
             }
         }
     }
-}
-
-/// 缓冲区里只有一个 ?：清掉，还原成问号上屏。
-fn restore_bare_question(dispatch: &mut Dispatch, engine: &mut Engine, english: bool) -> String {
-    let mark = engine.restore_bare_question(english);
-    dispatch.refresh(engine);
-    mark.unwrap_or_else(|| QUESTION_PREFIX.to_string())
 }
 
 /// 刷新后取帧（组句中才有帧）。
@@ -538,18 +493,6 @@ fn is_navigation(sym: u32) -> bool {
         sym,
         XK_LEFT | XK_UP | XK_RIGHT | XK_DOWN | XK_HOME | XK_END | XK_PAGE_UP | XK_PAGE_DOWN
     )
-}
-
-/// 把一个输入复制成「不在问字模式」的版本（用于还原 ? 后重新分派）。
-fn non_question_input(input: &KeyInput) -> KeyInput {
-    KeyInput {
-        sym: input.sym,
-        code: input.code,
-        modifiers: input.modifiers,
-        character: input.character,
-        is_release: input.is_release,
-        app: input.app.clone(),
-    }
 }
 
 // 占位：Modifiers 在配置里用，这里引用避免未使用警告

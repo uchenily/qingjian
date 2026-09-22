@@ -238,12 +238,8 @@ void QingjianEngine::paintFrame(fcitx::InputContext* ic, const QingjianFrame& fr
     preview.setCursor(static_cast<int>(preview.toString().size()));
     panel.setClientPreedit(preview);
 
-    // auxUp 显示整句补全 / 提示
-    if (frame.sentence && *frame.sentence) {
-        fcitx::Text aux;
-        aux.append(std::string(frame.sentence));
-        panel.setAuxUp(aux);
-    } else if (frame.notice && *frame.notice) {
+    // auxUp 显示提示
+    if (frame.notice && *frame.notice) {
         fcitx::Text aux;
         aux.append(std::string(frame.notice));
         panel.setAuxUp(aux);

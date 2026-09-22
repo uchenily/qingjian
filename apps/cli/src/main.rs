@@ -21,7 +21,6 @@ use qingjian_dictionary::{Dictionary, WordList};
 use qingjian_learning::FrequencyLearner;
 use qingjian_lm::BigramModel;
 use qingjian_platform::Config;
-use qingjian_predict::CloudPredictor;
 use qingjian_translate::Glossary;
 
 use crate::args::Args;
@@ -215,9 +214,6 @@ fn build_engine(args: &Args) -> Result<Engine, CliError> {
         .clone()
         .unwrap_or_else(args::default_config_file);
     let mut config = Config::load(&config_path)?;
-    if args.predict {
-        config.predict.enabled = true;
-    }
     if !args.fuzzy.is_empty() {
         let mut rules = FuzzyRules::default();
         for name in &args.fuzzy {
@@ -249,9 +245,5 @@ fn build_engine(args: &Args) -> Result<Engine, CliError> {
     }
     engine.set_shuangpin(config.general.shuangpin());
     engine.set_zhuyin_mode(config.general.zhuyin);
-    if config.predict.enabled {
-        let predictor = CloudPredictor::new(&config.predict)?;
-        engine = engine.with_predictor(Box::new(predictor));
-    }
     Ok(engine)
 }

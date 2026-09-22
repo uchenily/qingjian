@@ -61,10 +61,6 @@ pub struct Args {
     #[arg(long)]
     pub config: Option<PathBuf>,
 
-    /// 启用云联想（无视配置里的 enabled）；密钥来自配置或 QINGJIAN_API_KEY（`api_key_env`）
-    #[arg(long)]
-    pub predict: bool,
-
     /// 模糊音，逗号分隔（z-zh,c-ch,s-sh,n-l,f-h,l-r,an-ang,en-eng,in-ing），`all` 全开；给了就覆盖配置里的 [fuzzy]
     #[arg(long, value_delimiter = ',')]
     pub fuzzy: Vec<String>,

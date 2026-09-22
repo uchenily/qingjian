@@ -28,9 +28,6 @@ pub(crate) struct RenderData {
     /// 页码，只有多页时有。
     pub(super) footer: Option<String>,
 
-    /// 整句补全，画在拼音行右侧。
-    pub(super) sentence: Option<String>,
-
     /// 屏幕提示（删候选后的「已删除…」），画在拼音行下方。
     pub(super) notice: Option<String>,
 
@@ -50,7 +47,6 @@ impl RenderData {
             rows: Vec::new(),
             highlight: usize::MAX,
             footer: None,
-            sentence: None,
             notice: None,
             layout: LayoutMode::default(),
             theme_mode: ThemeMode::default(),
@@ -76,7 +72,6 @@ impl RenderData {
         self.highlight = frame.highlight;
         self.footer =
             (frame.page_count > 1).then(|| format!("{}/{}", frame.page + 1, frame.page_count));
-        self.sentence = frame.sentence.clone();
         self.notice = frame.notice.clone();
     }
 }

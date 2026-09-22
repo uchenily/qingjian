@@ -68,11 +68,7 @@ fn shuangpin_gives_letter_mode_keys_back_to_syllables() {
     assert!(!engine.expression_mode());
     assert_eq!(engine.query().unwrap().marked_text(), "zh");
     engine.set_input("u1");
-    assert!(!engine.question_mode());
-    // `?` 别名照常进问字
-    engine.set_input("?nihc");
-    assert!(engine.question_mode());
-    assert_eq!(engine.query().unwrap().marked_text(), "?ni'hao");
+    assert_eq!(engine.query().unwrap().marked_text(), "u1");
 }
 
 #[test]
@@ -85,12 +81,6 @@ fn microsoft_semicolon_is_a_final_only_after_a_lone_initial() {
     assert!(!engine.takes_semicolon());
     assert!(!engine.raw_mode());
     assert_eq!(engine.query().unwrap().marked_text(), "xing");
-    // 问字模式里也认：`?x;` 问的是 xing
-    engine.set_input("?x");
-    assert!(engine.takes_semicolon());
-    engine.push(';');
-    assert!(engine.question_mode());
-    assert_eq!(engine.query().unwrap().marked_text(), "?xing");
     engine.set_shuangpin(Some(Scheme::Xiaohe));
     engine.set_input("x");
     assert!(!engine.takes_semicolon());

@@ -52,8 +52,7 @@ impl<S: Read + Write> EngineClient<S> {
         Ok(())
     }
 
-    /// 送一个按键等结果。触发「翻译选中文字」快捷键时回 [`KeyReply::NeedSelection`]，
-    /// 调用方须读当前选区再用 [`Self::selection`] 回给 Server。
+    /// 送一个按键等结果。
     pub fn key(&mut self, event: KeyEvent) -> Result<KeyReply, ClientError> {
         let message = ClientMessage::Key {
             session: self.session,
@@ -70,42 +69,11 @@ impl<S: Read + Write> EngineClient<S> {
                 commit,
                 frame,
             })),
-            ServerMessage::RequestSelection { request, .. } => {
-                Ok(KeyReply::NeedSelection { request })
-            }
             _ => Err(ClientError::Unexpected("expected key result")),
         }
     }
 
-    /// 把读到的选区发给 Server，等它回翻译候选帧。空选区时 Server 不进入翻译、回空帧。
-    pub fn selection(
-        &mut self,
-        request: u64,
-        text: String,
-        rect: ScreenRect,
-    ) -> Result<KeyResponse, ClientError> {
-        let message = ClientMessage::Selection {
-            session: self.session,
-            request,
-            text,
-            rect,
-        };
-        match self.call(&message)? {
-            ServerMessage::KeyResult {
-                outcome,
-                commit,
-                frame,
-                ..
-            } => Ok(KeyResponse {
-                outcome,
-                commit,
-                frame,
-            }),
-            _ => Err(ClientError::Unexpected("expected key result for selection")),
-        }
-    }
-
-    /// 组句期间定时拉一次云联想的异步结果，回最新一帧。
+    /// 组句期间定时拉一次异步结果，回最新一帧。
     pub fn poll(&mut self) -> Result<Frame, ClientError> {
         match self.call(&ClientMessage::Poll {
             session: self.session,

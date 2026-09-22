@@ -116,7 +116,6 @@ pub fn init(mtm: MainThreadMarker, info: &BundleInfo) -> Result<(), HostError> {
     let menu = InputMenu::new(mtm, version);
     indicator.set_menu(&menu.ns_menu());
     let preferences = PreferencesWindow::new(mtm, &languages, version, &info.build);
-    let monitor = PredictMonitor::new(mtm);
     let watch = ConfigWatch::new(mtm);
     HOST.with(|host| {
         *host.borrow_mut() = Some(Host {
@@ -128,7 +127,6 @@ pub fn init(mtm: MainThreadMarker, info: &BundleInfo) -> Result<(), HostError> {
             settings,
             watch,
             last_flush: std::time::Instant::now(),
-            applied_predict: PredictConfig::default(),
             applied_dictionaries: DictionariesConfig::default(),
             dictionary_list: Vec::new(),
             learning_language,
@@ -136,24 +134,17 @@ pub fn init(mtm: MainThreadMarker, info: &BundleInfo) -> Result<(), HostError> {
             version: version.to_owned(),
             build: info.build.clone(),
             page_size: 9,
-            cloud_slots: 2,
             page_keys: qingjian_platform::DEFAULT_PAGE_KEYS,
             translation_keys: ShortcutConfig::default().translation_keys(),
             delete_keys: ShortcutConfig::default().delete_keys(),
             status: None,
             input_log_enabled: None,
-            translate_keys: KeyCombo::TRANSLATE_DEFAULT,
-            translation: None,
             notice: None,
             preedit_mode: PreeditMode::default(),
-            monitor,
-            cloud_test: None,
-            cloud_test_monitor: CloudTestMonitor::new(mtm),
             rescore: RescoreMonitor::new(mtm),
             model_loader: None,
             applied_model: None,
             session: Session::default(),
-            sentence: None,
             anchor: NSRect::ZERO,
         })
     });

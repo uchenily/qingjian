@@ -1,6 +1,6 @@
 //! 候选窗口的一行：[`Candidate`] 的展示形态，与 macOS 端 `candidates/row.rs` 一致。
 
-use qingjian_core::{Candidate, CandidateKind};
+use qingjian_core::Candidate;
 
 /// annotation 片段的深浅。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,9 +26,6 @@ pub(crate) struct Row {
 
     /// 右侧 annotation，按顺序绘制；没有译文时为空。
     pub annotation: Vec<(String, Tone)>,
-
-    /// 来自云联想：词前画一个小云朵。
-    pub cloud: bool,
 }
 
 impl Row {
@@ -63,7 +60,6 @@ impl Row {
             index: (position + 1).to_string(),
             text: candidate.text.clone(),
             annotation,
-            cloud: candidate.kind == CandidateKind::Cloud,
         }
     }
 }

@@ -1,22 +1,20 @@
-//! 组句的展示状态：缓冲变化时重查候选并重建 [`Composed`]，云端词异步并入，高亮 / 翻页，按状态生成给 DLL 的帧。
+//! 组句的展示状态：缓冲变化时重查候选并重建 [`Composed`]，高亮 / 翻页，按状态生成给 DLL 的帧。
 
 mod state;
 
-use qingjian_core::{Candidate, CandidateLayout, CandidateList, CloudWord};
+use qingjian_core::{Candidate, CandidateLayout, CandidateList};
 use qingjian_platform::protocol::{Frame, PreeditKind, PreeditSegment};
 
 pub(super) use self::state::Composed;
 use super::Router;
 
 impl Router {
-    /// 缓冲变化后：按 Engine 状态重建 [`Composed`]，发一次云联想请求，归零高亮与整句补全。
+    /// 缓冲变化后：按 Engine 状态重建 [`Composed`]，归零高亮。
     pub(super) fn recompose(&mut self) {
         self.highlight = 0;
         self.navigated = false;
-        self.sentence = None;
         if self.engine.composition().is_empty() {
             self.composed = None;
-            self.cancel_prediction();
             self.stop_rescoring();
             return;
         }
@@ -30,11 +28,7 @@ impl Router {
         });
         self.composed = Some(match built {
             Some((items, preedit, cursor)) => {
-                let layout =
-                    CandidateLayout::new(items, self.config.page_size, self.config.cloud_slots);
-                if self.engine.prediction_enabled() {
-                    self.engine.request_prediction(None, layout.local());
-                }
+                let layout = CandidateLayout::new(items, self.config.page_size);
                 Composed::Candidates {
                     preedit,
                     cursor,
@@ -42,7 +36,6 @@ impl Router {
                 }
             }
             None => {
-                self.cancel_prediction();
                 let composition = self.engine.composition();
                 let text = composition.text().to_owned();
                 let cursor = text[..composition.cursor()].chars().count();
@@ -50,45 +43,6 @@ impl Router {
             }
         });
         self.schedule_rescoring();
-    }
-
-    /// 拉一次云联想结果：云端词并进候选布局，整句补全记下；翻译评审时结果是译文。
-    pub(super) fn poll_prediction(&mut self) {
-        if !self.engine.prediction_enabled() {
-            return;
-        }
-        let Some(prediction) = self.engine.poll_prediction() else {
-            return;
-        };
-        if self.translation.is_some() {
-            match prediction.sentence {
-                Some(text) => {
-                    if let Some(translation) = self.translation.as_mut() {
-                        translation.result = Some(text);
-                    }
-                }
-                None => {
-                    tracing::info!("翻译选中文字：云端没有给出译文");
-                    self.translation = None;
-                }
-            }
-            return;
-        }
-        if let Some(Composed::Candidates { layout, .. }) = self.composed.as_mut() {
-            let words: Vec<Candidate> = prediction
-                .words
-                .into_iter()
-                .map(CloudWord::into_candidate)
-                .collect();
-            layout.set_cloud(words);
-            self.sentence = prediction.sentence;
-        }
-    }
-
-    pub(super) fn cancel_prediction(&mut self) {
-        if self.engine.prediction_enabled() {
-            self.engine.cancel_prediction();
-        }
     }
 
     /// 高亮移动 `delta`，夹在 `[0, 末尾]`，到页边自然换页。
@@ -141,11 +95,8 @@ impl Router {
         Some(self.engine.commit(&candidate))
     }
 
-    /// 按当前状态生成一帧：翻译评审优先；没在组句给空帧；否则给高亮所在的那一页。
+    /// 按当前状态生成一帧：没在组句给空帧；否则给高亮所在的那一页。
     pub(super) fn current_frame(&self) -> Frame {
-        if let Some(translation) = &self.translation {
-            return self.translation_frame(translation);
-        }
         match &self.composed {
             None => Frame::default(),
             Some(Composed::Raw { text, cursor }) => Frame {
@@ -160,7 +111,6 @@ impl Router {
                 page_count: 1,
                 layout: self.config.layout,
                 theme: self.config.theme,
-                sentence: None,
                 notice: self.notice.clone(),
             },
             Some(Composed::Candidates {
@@ -187,7 +137,6 @@ impl Router {
                     page_count: layout.pages().max(1),
                     layout: self.config.layout,
                     theme: self.config.theme,
-                    sentence: self.sentence.clone(),
                     notice: self.notice.clone(),
                 }
             }

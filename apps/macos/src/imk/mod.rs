@@ -38,7 +38,6 @@ pub fn recover_from_panic(client: Option<TextClient<'_>>) {
         let pending = crate::host::with(|h| {
             let text = h.engine.composition().text().to_owned();
             h.engine.clear();
-            h.cancel_prediction();
             h.window.hide();
             text
         });

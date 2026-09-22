@@ -32,13 +32,11 @@ pub use composition::Composition;
 pub use correction::Correction;
 pub use emoji::EmojiTable;
 pub use engine::{
-    AnnotationReport, BOOKS, Book, CloudWord, CommitEntry, Engine, FRESH_UNTIL, FilledGloss,
-    Forgotten, GlossFiller, INPUT_LOG_VERSION, InputLogEntry, InputLogger, InputSource, Learner,
-    LevelCount, MarkedKind, MarkedSegment, ModeKeys, NEURAL_MARGIN, NEURAL_WEIGHT, NoGlossFiller,
-    NoInputLogger, NoLearner, NoPredictor, NoTranslator, NoUsageMeter, NoVocabularyTracker,
-    Prediction, PredictionKind, PredictionPolicy, PredictionRequest, Predictor, QUESTION_PREFIX,
-    Query, RESCORE_CONTEXT_CHARS, SurroundingText, Timings, Translator, Usage, UsageMeter,
-    UsageSummary, VocabularySummary, VocabularyTracker, book_scale,
+    AnnotationReport, BOOKS, Book, CommitEntry, Engine, FRESH_UNTIL, Forgotten,
+    INPUT_LOG_VERSION, InputLogEntry, InputLogger, InputSource, Learner, LevelCount, MarkedKind,
+    MarkedSegment, ModeKeys, NEURAL_MARGIN, NEURAL_WEIGHT, NoInputLogger, NoLearner, NoTranslator,
+    NoUsageMeter, NoVocabularyTracker, Query, RESCORE_CONTEXT_CHARS, Timings, Translator, Usage,
+    UsageMeter, UsageSummary, VocabularySummary, VocabularyTracker, book_scale,
 };
 pub use fuzzy::FuzzyRules;
 pub use history::InputHistory;

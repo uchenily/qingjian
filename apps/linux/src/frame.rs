@@ -58,8 +58,7 @@ pub struct Frame {
     /// 外观：0 跟随系统、1 浅色、2 深色。
     pub theme: u8,
 
-    /// 整句补全（preedit 右侧，Tab 上屏）；空指针表示无。
-    pub sentence: *mut c_char,
+    /// 整句补全已移除（原云整句）。
     /// 屏幕提示（删候选后的「已删除…」）；空指针表示无。
     pub notice: *mut c_char,
 }
@@ -121,10 +120,6 @@ impl Frame {
             self.candidates = std::ptr::null_mut();
             self.candidate_count = 0;
         }
-        if !self.sentence.is_null() {
-            unsafe { drop(CString::from_raw(self.sentence)) };
-            self.sentence = std::ptr::null_mut();
-        }
         if !self.notice.is_null() {
             unsafe { drop(CString::from_raw(self.notice)) };
             self.notice = std::ptr::null_mut();
@@ -142,7 +137,6 @@ pub struct FrameBuilder {
     pub page_count: usize,
     pub layout: u8,
     pub theme: u8,
-    pub sentence: Option<String>,
     pub notice: Option<String>,
 }
 
@@ -182,11 +176,6 @@ impl FrameBuilder {
             page_count: self.page_count,
             layout: self.layout,
             theme: self.theme,
-            sentence: self
-                .sentence
-                .as_deref()
-                .map(cstring)
-                .unwrap_or(std::ptr::null_mut()),
             notice: self
                 .notice
                 .as_deref()

@@ -63,11 +63,6 @@ pub(crate) fn view(settings: &Settings, context: &mut ViewContext<Settings>) -> 
             mode_combo(s.mode.expression, context.callback(Message::ModeExpression)),
         ),
         field(
-            "问字模式键",
-            "这两个字母开头进模式：v1+2 出 3，usangemu 问「三个木」（需要云服务）；? 开头永远是问字。两个键不能相同。",
-            mode_combo(s.mode.question, context.callback(Message::ModeQuestion)),
-        ),
-        field(
             "译词上屏（第一个）",
             "按住修饰键再按候选序号，上屏候选右侧的译词而不是中文。",
             modifier_combo(s.translation, context.callback(Message::Translation)),
@@ -82,18 +77,10 @@ pub(crate) fn view(settings: &Settings, context: &mut ViewContext<Settings>) -> 
         ),
         field(
             "删除候选",
-            "按住修饰键再按候选序号：自己造的词、云端选过的词整删；词库里的词清掉学习记录，回到原排序。",
+            "按住修饰键再按候选序号：自己造的词整删；词库里的词清掉学习记录，回到原排序。",
             modifier_combo(
                 s.delete_candidate,
                 context.callback(Message::DeleteCandidate),
-            ),
-        ),
-        field(
-            "翻译选中文字",
-            "选中一段文字后按这组键 + 当前字母（缺省 Ctrl+Alt+T），把它译成学习语言，回车 / 空格替换、Esc 保留原文。需要云服务。这里只改修饰键，字母固定用当前的。",
-            modifier_combo(
-                s.translate_selection.modifiers,
-                context.callback(Message::TranslateSelection),
             ),
         ),
     ];

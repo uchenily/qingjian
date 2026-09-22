@@ -8,7 +8,7 @@ mod result;
 
 use std::time::{Duration, Instant};
 
-use qingjian_core::{Engine, QUESTION_PREFIX, shortcut};
+use qingjian_core::{Engine, shortcut};
 use qingjian_platform::{Config, DEFAULT_PAGE_KEYS, LayoutMode, Modifiers, PreeditMode, ThemeMode};
 
 pub use key::KeyInput;
@@ -20,9 +20,6 @@ use crate::session::{Session, kind_of};
 /// 学习数据落盘间隔（与 macOS / Windows 壳一致）。
 const LEARNING_FLUSH_INTERVAL: Duration = Duration::from_secs(60);
 
-/// 云端词在第一页末尾占的格数（与 macOS / Windows 一致）。
-const CLOUD_SLOTS: usize = 2;
-
 /// 分派器：持有会话状态与从配置来的常量。
 pub struct Dispatch {
     session: Session,
@@ -33,8 +30,6 @@ pub struct Dispatch {
     /// 组句中的拼音显示位置（行内 / 窗口 / 两处）。MVP 阶段统一画在候选窗，保留字段供后续按配置分。
     #[allow(dead_code)]
     preedit_mode: PreeditMode,
-    /// 整句补全（preedit 右侧、Tab 上屏）；缓冲变化时清空。
-    sentence: Option<String>,
     /// 删候选后的屏幕提示，随下一帧下发、下一次按键清。
     notice: Option<String>,
     /// 上次把学习数据落盘的时间。
@@ -52,7 +47,6 @@ impl Dispatch {
             layout: config.general.layout,
             theme: config.general.theme,
             preedit_mode: config.general.preedit,
-            sentence: None,
             notice: None,
             last_flush: Instant::now(),
             app: None,
@@ -84,7 +78,6 @@ impl Dispatch {
             String::new()
         };
         self.session = Session::default();
-        self.sentence = None;
         self.notice = None;
         engine.break_chain();
         engine.flush_learning();
@@ -101,25 +94,13 @@ impl Dispatch {
         };
         engine.clear();
         self.session = Session::default();
-        self.sentence = None;
         self.notice = None;
         KeyOutcome::committed(commit, Frame::empty())
     }
 
-    /// 轮询异步结果（云联想、释义兜底）。有更新返回新帧。
-    pub fn poll(&mut self, engine: &mut Engine) -> Option<Frame> {
-        let mut changed = false;
-        // 云联想结果
-        if let Some(prediction) = engine.poll_prediction() {
-            changed = self.apply_prediction(engine, prediction) || changed;
-        }
-        // 释义兜底结果（不改变帧，只是后台写个人释义表）
-        engine.poll_glosses();
-        if changed {
-            Some(self.build_frame(engine))
-        } else {
-            None
-        }
+    /// 轮询异步结果。云联想与释义兜底已移除，当前无异步结果，恒返回 `None`。
+    pub fn poll(&mut self, _engine: &mut Engine) -> Option<Frame> {
+        None
     }
 
     /// 取当前应该显示的帧（不触发计算）。
@@ -151,47 +132,14 @@ impl Dispatch {
                     cursor,
                     query.candidates.items,
                     self.page_size,
-                    CLOUD_SLOTS,
                 );
             }
             Err(_) => {
                 let marked = engine.composition().text().to_owned();
                 self.session
-                    .reset_plain(&marked, cursor, self.page_size, CLOUD_SLOTS);
+                    .reset_plain(&marked, cursor, self.page_size);
             }
         }
-    }
-
-    /// 应用一次联想结果：云端词补进第一页末尾、整句补全进 preedit 右侧。返回帧是否变了。
-    fn apply_prediction(
-        &mut self,
-        engine: &mut Engine,
-        prediction: qingjian_core::Prediction,
-    ) -> bool {
-        let mut changed = false;
-        if !engine.composition().is_empty()
-            && self.session.cloud_slots_untouched()
-            && !prediction.words.is_empty()
-        {
-            let mut words = qingjian_core::CandidateList {
-                items: prediction
-                    .words
-                    .into_iter()
-                    .map(|w| w.into_candidate())
-                    .collect(),
-            };
-            engine.annotate(&mut words);
-            let filled = self.session.set_cloud(words.items);
-            tracing::debug!(filled, "云端词已补进候选");
-            changed = filled > 0;
-        }
-        if let Some(sentence) = prediction.sentence
-            && self.sentence.as_deref() != Some(&sentence)
-        {
-            self.sentence = Some(sentence);
-            changed = true;
-        }
-        changed
     }
 
     /// 由会话状态构造一帧。
@@ -219,7 +167,6 @@ impl Dispatch {
             page_count: self.session.pages(),
             layout: layout_code(self.layout),
             theme: theme_code(self.theme),
-            sentence: self.sentence.clone(),
             notice: self.notice.clone(),
         };
         builder.to_frame()
@@ -235,10 +182,6 @@ impl Dispatch {
 
     pub(crate) fn session(&mut self) -> &mut Session {
         &mut self.session
-    }
-
-    pub(crate) fn take_sentence(&mut self) -> Option<String> {
-        self.sentence.take()
     }
 
     #[allow(dead_code)]
@@ -270,5 +213,4 @@ fn _ensure_used() {
     let _ = shortcut::is_expression_char('1');
     let _ = Modifiers::default();
     let _ = DEFAULT_PAGE_KEYS;
-    let _ = QUESTION_PREFIX;
 }

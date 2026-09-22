@@ -21,26 +21,15 @@ pub(crate) enum Message {
     Preedit(Option<usize>),
     StatusBar(bool),
 
-    // 云服务页
+    // 本地整句模型
     LocalModel(bool),
-    CloudEnabled(bool),
-    CloudApiKey(String),
-    CloudModel(String),
-    CloudBaseUrl(String),
-    CloudSlots(Option<f64>),
-    CloudSentence(bool),
-    TestConnection,
-    CloudTestDone(Result<String, String>),
 
     // 快捷键页
     PageKeys(Option<usize>),
     ModeExpression(Option<usize>),
-    ModeQuestion(Option<usize>),
     Translation(Option<usize>),
     TranslationSecond(Option<usize>),
     DeleteCandidate(Option<usize>),
-    /// 只换修饰键，字母键固定用当前的。
-    TranslateSelection(Option<usize>),
 
     // 模糊音页
     /// 配置键 + 新值。

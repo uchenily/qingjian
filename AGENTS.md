@@ -7,6 +7,8 @@
 跨平台输入法，Core 平台无关，各平台只做壳。已发版 macOS 0.1.2（自用 + 测试者）、Windows 0.1.0-alpha.2（内测）；Linux fcitx5 addon 开发中（本分支 `feat/linux-fcitx5`）。
 阶段与已完成项见 `docs/plan/roadmap.md`，待办见 `docs/plan/todo.md`。
 
+项目是在原项目基础上针对个人使用习惯做的定制化修改, 目前首要目标是实现"Linux上最贴合双拼使用者使用习惯的纯本地输入法".
+
 ## 目录地图
 
 一行一个，只说它是什么、入口在哪；实现要点（数据文件、常数、生成命令）在 `docs/notes/crate-notes.md`，改了实现要同步那里。

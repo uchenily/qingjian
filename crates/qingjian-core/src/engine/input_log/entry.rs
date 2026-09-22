@@ -112,19 +112,6 @@ pub enum InputLogEntry {
         text: String,
     },
 
-    /// 云端联想的结果到达并展示了：给过用户什么，紧接着的 `commit` 说明接没接受。
-    Prediction {
-        /// 请求时的作用域（原始键）。
-        scope: String,
-
-        /// 云端词文本。
-        words: Vec<String>,
-
-        /// 整句补全。
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        sentence: Option<String>,
-    },
-
     /// 上文链断了（切换应用、失焦、清空）：文本流的段落边界。
     Break {
         /// 断开之后所在的应用；壳没给为 `None`。

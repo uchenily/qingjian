@@ -10,7 +10,7 @@ use qingjian_platform::Config;
 use super::controls::{language_label, small_label};
 use super::layout::{Layout, PAGE_PADDING, PAGE_WIDTH};
 use super::pages::{
-    AdvancedPage, CandidatesPage, CloudPage, DictionariesPage, FuzzyPage, GeneralPage, PhrasesPage,
+    AdvancedPage, CandidatesPage, DictionariesPage, FuzzyPage, GeneralPage, PhrasesPage,
     ShortcutsPage, UsagePage, build_about,
 };
 use super::panel::PreferencesPanel;
@@ -47,9 +47,6 @@ pub struct PreferencesWindow {
 
     /// 「词库」页。
     dictionaries: DictionariesPage,
-
-    /// 「云服务」页。
-    cloud: CloudPage,
 
     /// 「高级」页。
     advanced: AdvancedPage,
@@ -104,10 +101,6 @@ impl PreferencesWindow {
         let mut layout = new_layout();
         let dictionaries = DictionariesPage::build(&mut layout, mtm, &target);
         pages.push(page("词库", layout));
-
-        let mut layout = new_layout();
-        let cloud = CloudPage::build(&mut layout, mtm, &target);
-        pages.push(page("云服务", layout));
 
         let mut layout = new_layout();
         let advanced = AdvancedPage::build(&mut layout, mtm, &target);
@@ -177,7 +170,6 @@ impl PreferencesWindow {
             phrases,
             fuzzy,
             dictionaries,
-            cloud,
             advanced,
             usage,
             status,
@@ -212,11 +204,10 @@ impl PreferencesWindow {
         self.panel.present();
     }
 
-    /// 按配置刷新所有控件。`key_present` 是密钥已经有了（环境或配置里）；密钥框永远不回显值。
+    /// 按配置刷新所有控件。
     pub fn sync(
         &self,
         config: &Config,
-        key_present: bool,
         error: Option<&str>,
         dictionaries: &[DictionaryInfo],
     ) {
@@ -226,11 +217,6 @@ impl PreferencesWindow {
         self.shortcuts.sync(config);
         self.phrases.sync(config);
         self.fuzzy.sync(config);
-        self.cloud.sync(
-            config,
-            key_present,
-            crate::app::paths::model_path().is_some(),
-        );
         self.advanced.sync(config);
         let status = error
             .map(|e| format!("配置文件有错误，已沿用上一份：{e}"))

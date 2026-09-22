@@ -30,9 +30,6 @@ pub struct Theme {
     /// 序号颜色。
     pub index_color: Retained<NSColor>,
 
-    /// 云联想的云朵与文字颜色：比译文醒目一点，但仍不抢候选词。
-    pub cloud_color: Retained<NSColor>,
-
     /// 窗口背景。
     pub background: Retained<NSColor>,
 
@@ -67,7 +64,6 @@ impl Theme {
             pos_color: NSColor::tertiaryLabelColor(),
             fresh_color: NSColor::systemOrangeColor(),
             index_color: NSColor::tertiaryLabelColor(),
-            cloud_color: NSColor::systemTealColor(),
             background: NSColor::windowBackgroundColor(),
             highlight: NSColor::colorWithSRGBRed_green_blue_alpha(0.0, 0.48, 1.0, 0.16),
             padding: 8.0,
