@@ -44,9 +44,7 @@ fn write_atomic_with(
         let mut writer = BufWriter::new(file);
         write(&mut writer)?;
         writer.flush()?;
-        // 不调 sync_all：fsync 在慢盘 / 网络盘 / 杀软扫描下可能长时间阻塞，而本函数被 Server
-        // 工人线程在按键 / tick 路径上调用（学习数据落盘、配置热加载）。rename 本身原子，数据已进
-        // OS 缓存，进程崩溃不丢；只有断电才丢最后几秒——学习数据最多丢一个 flush 周期（60s），可接受。
+        writer.get_ref().sync_all()?;
         fs::rename(&temporary, path)
     })();
     if result.is_err() {

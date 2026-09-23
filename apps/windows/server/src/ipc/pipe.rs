@@ -9,7 +9,7 @@ use std::io;
 use std::os::windows::io::{AsRawHandle, FromRawHandle};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use windows::Win32::Foundation::{ERROR_ACCESS_DENIED, ERROR_PIPE_CONNECTED, HANDLE};
 use windows::Win32::Security::Authorization::{
@@ -166,13 +166,8 @@ fn wait_client(stream: File) -> io::Result<File> {
 }
 
 /// 服务一条连接：读消息 → 转给工人线程 → 写回，直到对端在帧边界关闭或出错。
-///
-/// 等工人线程回响应带超时：工人线程正常处理一条消息远不到一秒，本地整句模型在后台、不阻塞按键。
-/// 若工人线程因未预见原因卡住（慢盘 fsync、死循环等），超时后断开本连接——客户端会断开重连，
-/// 不至于让应用输入法永久无响应。这是工人线程不卡住之外的第二道防线。
 fn serve_connection(mut stream: File, sender: Sender<Work>) {
     let (reply_sender, reply_receiver) = mpsc::channel::<Option<ServerMessage>>();
-    const REPLY_TIMEOUT: Duration = Duration::from_secs(10);
     loop {
         let message = match read_message::<_, ClientMessage>(&mut stream) {
             Ok(Some(message)) => message,
@@ -188,21 +183,14 @@ fn serve_connection(mut stream: File, sender: Sender<Work>) {
         {
             break;
         }
-        match reply_receiver.recv_timeout(REPLY_TIMEOUT) {
+        match reply_receiver.recv() {
             Ok(Some(response)) => {
                 if write_message(&mut stream, &response).is_err() {
                     break;
                 }
             }
             Ok(None) => {}
-            Err(RecvTimeoutError::Timeout) => {
-                tracing::warn!(
-                    timeout = ?REPLY_TIMEOUT,
-                    "等工人线程响应超时，断开本连接（客户端将重连）"
-                );
-                break;
-            }
-            Err(RecvTimeoutError::Disconnected) => break,
+            Err(_) => break,
         }
     }
     let _ = unsafe { DisconnectNamedPipe(HANDLE(stream.as_raw_handle())) };
