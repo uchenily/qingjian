@@ -17,6 +17,37 @@ pub use result::{KeyOutcome, KeyResult};
 use crate::frame::{Frame, FrameBuilder};
 use crate::session::{Session, kind_of};
 
+/// 把候选的译文拼成一条纯文本 annotation，与 macOS / Windows 壳的 `candidates::row` 对齐：
+/// 读音 · 词性 译文(假名) · 词性 译文(假名)。fcitx5 的 `CandidateWord::setComment` 只接受纯文本，
+/// 色调分层（生词强调、词性淡色）无法表达，但内容（多条释义、词性、furigana 注音）完整保留。
+fn annotation_text(candidate: &qingjian_core::Candidate) -> Option<String> {
+    let mut parts: Vec<String> = Vec::new();
+    if let Some(reading) = &candidate.reading {
+        parts.push(reading.clone());
+    }
+    if let Some(translation) = &candidate.translation {
+        for (i, sense) in translation.senses().iter().enumerate() {
+            if i > 0 || !parts.is_empty() {
+                parts.push(" · ".to_owned());
+            }
+            if let Some(pos) = sense.part_of_speech {
+                parts.push(format!("{pos} "));
+            }
+            for segment in sense.furigana() {
+                parts.push(segment.text.clone());
+                if let Some(reading) = segment.reading {
+                    parts.push(format!("({reading})"));
+                }
+            }
+        }
+    }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.concat())
+    }
+}
+
 /// 学习数据落盘间隔（与 macOS / Windows 壳一致）。
 const LEARNING_FLUSH_INTERVAL: Duration = Duration::from_secs(60);
 
@@ -150,12 +181,9 @@ impl Dispatch {
             .page_candidates()
             .into_iter()
             .map(|(cand, highlighted)| {
-                let translation = cand
-                    .translation
-                    .as_ref()
-                    .and_then(|t| t.senses().first())
-                    .map(|s| s.text.clone());
-                (cand.text, translation, kind_of(cand.kind), highlighted)
+                let annotation = annotation_text(&cand);
+                let kind = kind_of(cand.kind);
+                (cand.text, annotation, kind, highlighted)
             })
             .collect();
         let builder = FrameBuilder {
