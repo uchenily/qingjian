@@ -6,10 +6,11 @@ use super::{LayoutMode, LogLevel, PreeditMode, ThemeMode};
 /// 每页最多几个候选：数字键只有 1–9。
 pub const MAX_PAGE_SIZE: usize = 9;
 
-/// 翻页键对的可选值，第一项是缺省：第一个键向前、第二个向后。`-` `=` 不在其中，`-` 已经是英文直输段的入口。
+/// 翻页键对的可选值，第一项是缺省：第一个键向前、第二个向后。
 /// 缺省不用 `,` `.`：组句中敲逗号句号应该把首选上屏再补一个全角标点（`nihao,zaima` 一气打完），
-/// 拿它们翻页就得先按空格再敲标点。
-pub const PAGE_KEY_OPTIONS: [&str; 2] = ["[]", ",."];
+/// 拿它们翻页就得先按空格再敲标点。`-` `=` 可选：组句中敲 `-` 缺省进英文直输段（`no-way`），
+/// 配成翻页键后那个入口让位给翻页。
+pub const PAGE_KEY_OPTIONS: [&str; 3] = ["[]", ",.", "-="];
 
 /// 缺省翻页键对，与 [`PAGE_KEY_OPTIONS`] 第一项一致。
 pub const DEFAULT_PAGE_KEYS: (char, char) = ('[', ']');
@@ -139,6 +140,8 @@ mod tests {
         assert_eq!(general.page_keys(), ('[', ']'));
         general.page_keys = ",,".to_owned();
         assert_eq!(general.page_keys(), ('[', ']'));
+        general.page_keys = "-=".to_owned();
+        assert_eq!(general.page_keys(), ('-', '='));
     }
 
     #[test]

@@ -326,8 +326,6 @@ impl QingjianInputController {
         let expression = composing && host::with(|h| h.engine.expression_mode()).unwrap_or(false);
         // 英文直输段（缓冲区里已有 `-` 这类字符）：可见字符一律追加，空格 / 回车整段原样上屏
         let raw = composing && host::with(|h| h.engine.raw_mode()).unwrap_or(false);
-        // 组句中敲 `-`：进入英文直输段（`no-way`），不再当翻页键；翻页键见配置 `[general] page_keys`
-        let hyphen = composing && !question && c == '-';
         // 微软 / 搜狗双拼的 `;` 是 ing 键：末尾有落单声母时进缓冲区，其他时候还是标点
         let semicolon =
             composing && c == ';' && host::with(|h| h.engine.takes_semicolon()).unwrap_or(false);
@@ -346,7 +344,6 @@ impl QingjianInputController {
             || semicolon
             || (expression && qingjian_core::shortcut::is_expression_char(c))
             || (raw && c.is_ascii_graphic())
-            || hyphen
             || punctuation
         {
             host::with(|h| h.engine.push(c));
