@@ -70,6 +70,7 @@ $RequiredGenerated = @(
 # 产物路径（按构建配置）。
 $Profile = if ($Release) { 'release' } else { 'debug' }
 $TsfDll   = Join-Path $Repo "target\$Profile\qingjian_tsf.dll"
+$TsfDllDeps = Join-Path $Repo "target\$Profile\deps\qingjian_tsf.dll"
 $ServerExe = Join-Path $Repo "target\$Profile\qingjian-server.exe"
 
 function Write-Step([string]$msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
@@ -195,23 +196,27 @@ if (-not $NoUninstall -and (Test-Path $Uninstaller)) {
 if (-not $NoBuild) {
     Write-Step "cargo build $Profile（DLL + Server）"
     # 清理上轮留下的 .prev（能删的删，删不掉的忽略）。
-    if (Test-Path "$TsfDll.prev") {
-        Remove-Item "$TsfDll.prev" -Force -ErrorAction SilentlyContinue
+    foreach ($prev in @("$TsfDll.prev", "$TsfDllDeps.prev")) {
+        if (Test-Path $prev) {
+            Remove-Item $prev -Force -ErrorAction SilentlyContinue
+        }
     }
-    # 旧 DLL 被进程加载时重命名走，空出原路径给 cargo 链接新文件。
-    if (Test-Path $TsfDll) {
+    # 旧 DLL 被进程加载时重命名走，空出原路径给 cargo 链接新文件。cargo 先把 cdylib 链接到
+    # deps\ 下再复制到上层，两个路径都要腾空，否则 deps\ 下的文件锁会让链接器 LNK1104。
+    foreach ($dll in @($TsfDll, $TsfDllDeps)) {
+        if (-not (Test-Path $dll)) { continue }
         try {
-            Rename-Item $TsfDll "$TsfDll.prev" -Force -ErrorAction Stop
-            if (Test-Path "$TsfDll.prev") {
-                Write-Ok '旧 DLL 已重命名走（进程仍持有旧映像，新构建写到原路径）'
+            Rename-Item $dll "$dll.prev" -Force -ErrorAction Stop
+            if (Test-Path "$dll.prev") {
+                Write-Ok "旧 DLL 已重命名走：$dll（进程仍持有旧映像，新构建写到原路径）"
             }
         } catch {
             # 重命名也失败（罕见，可能权限）：回退到旧的检测 + 报错流程。
-            $holders = Get-DllHolders | Where-Object { $_.DLL -eq $TsfDll }
+            $holders = Get-DllHolders | Where-Object { $_.DLL -eq $dll }
             if ($holders) {
                 Write-Warn "DLL 被占用且无法重命名，构建会失败："
                 $holders | Format-Table -AutoSize | Out-Host
-                throw 'DLL 被占用且无法重命名；关闭占用进程或注销重登后重试'
+                throw "DLL 被占用且无法重命名：$dll；关闭占用进程或注销重登后重试"
             }
         }
     }
