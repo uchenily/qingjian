@@ -4,7 +4,7 @@
 
 use windows::Win32::Foundation::{FALSE, LPARAM, WPARAM};
 use windows::Win32::UI::TextServices::{ITfContext, ITfKeyEventSink_Impl};
-use windows::core::{BOOL, Ref, Result};
+use windows::core::{BOOL, GUID, Ref, Result};
 
 use qingjian_platform::protocol::{KeyEvent, KeyOutcome};
 
@@ -56,6 +56,11 @@ impl ITfKeyEventSink_Impl for TextService_Impl {
 
     fn OnKeyUp(&self, _pic: Ref<ITfContext>, wparam: WPARAM, _lparam: LPARAM) -> Result<BOOL> {
         self.note_key_up(wparam.0 as u32);
+        Ok(FALSE)
+    }
+
+    /// 保留键（TSF 注册的快捷键）命中回调。本项目没用保留键，一律不处理。
+    fn OnPreservedKey(&self, _pic: Ref<ITfContext>, _guid: *const GUID) -> Result<BOOL> {
         Ok(FALSE)
     }
 }
