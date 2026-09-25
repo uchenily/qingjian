@@ -204,7 +204,7 @@ impl Engine {
         let convert = |text: &str, whole: bool| {
             let pinyin = decode(text)?;
             let segmentations = parser::segment(&pinyin).ok()?;
-            self.convert_sentence_with(&segmentations.first()?.patterns(), true, whole)
+            self.convert_sentence_static(&segmentations.first()?.patterns(), whole)
         };
         let (Some(head), Some(plain)) = (
             convert(&scope[..tail.head_len], false),

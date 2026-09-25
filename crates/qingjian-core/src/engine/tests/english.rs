@@ -1,6 +1,57 @@
 //! 英文模式与中英混输。
 
 use super::*;
+use crate::sentence::SentenceScorer;
+
+/// 神经重打分不该扭曲「要不要切英文尾段」的结构性判断：`xnwftibuysdjxb`（小鹤）应整句读成
+/// 「小问题不用担心」，不能因为重打分偏爱短头段「小问题」就错切成「小问题 + buys + 担心」。
+/// `mixed_beats_plain` 用静态语言模型比，不参与重打分。
+#[test]
+fn neural_rescoring_does_not_break_english_tail_split_decision() {
+    const DICT: &str = "
+小	xiao	900000
+晓	xiao	800000
+问题	wen ti	800000
+小问题	xiao wen ti	700000
+不	bu	600000
+步	bu	500000
+用	yong	500000
+拥	yong	400000
+担	dan	400000
+心	xin	400000
+新	xin	300000
+不用担心	bu yong dan xin	600000
+不用担心	bu yong dan xin	550000
+";
+    /// 偏爱短头段「小问题」，给长整句极低分，模拟重打分扭曲比分的极端情形。
+    struct PrefersShortHead;
+    impl SentenceScorer for PrefersShortHead {
+        fn score(&self, _context: &str, texts: &[&str]) -> Vec<f64> {
+            texts
+                .iter()
+                .map(|t| if *t == "小问题" { 0.0 } else { -100.0 })
+                .collect()
+        }
+    }
+    let mut engine = Engine::new(Dictionary::parse(DICT).unwrap())
+        .with_english(WordList::parse("buys	buys	3930
+").unwrap())
+        .with_sentence_scorer(Box::new(PrefersShortHead), Some(1.0), None, None);
+    engine.set_shuangpin(Some(Scheme::Xiaohe));
+    engine.set_input("xnwftibuysdjxb");
+    let query = engine.query().unwrap();
+    let first = &query.candidates.items[0];
+    assert_eq!(
+        first.text, "小问题不用担心",
+        "不应被重打分错切成含英文 buys 的候选，实际：{:?}",
+        query.candidates.items.iter().map(|c| &c.text).collect::<Vec<_>>()
+    );
+    assert!(
+        !query.candidates.items.iter().any(|c| c.text.contains("buys")),
+        "不应出现含英文 buys 的候选，实际：{:?}",
+        query.candidates.items.iter().map(|c| &c.text).collect::<Vec<_>>()
+    );
+}
 
 #[test]
 fn english_word_ranks_first_when_input_is_unlikely_pinyin() {

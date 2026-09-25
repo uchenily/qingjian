@@ -57,6 +57,8 @@ Engine 侧在 `engine/rescoring/`：接了打分器就取 Viterbi 前 `RESCORE_P
 个人 n-gram / 用户加分 / 代价不动），分走「前文 + 文本 → 神经分」缓存 `NeuralCache`；同步打分器（`with_sentence_scorer`，CLI 评测）当场补分，
 异步的（`with_async_sentence_scorer`，后台线程 `RescoreWorker`）查询不等模型：缺分的记下来，壳停键后 `request_rescoring`、`poll_rescoring` 到了再 `query` 一次。
 前文优先用壳给的应用光标前文（`set_rescoring_context`），没有用本会话最近 64 个上屏字符。CLI `--neural <导出目录>`（`--neural-weight` / `--neural-context` / `--neural-async`）。
+重打分只重排最终展示给用户的候选顺序，不参与「要不要切英文尾段」的结构性判断（`mixed_beats_plain` 用 `convert_sentence_static` 走静态语言模型比，
+否则短头段 + 英文词的神经分量纲与长整段不同会扭曲比分，把 `小问题不用担心` 错切成 `小问题 + buys + 担心`）。
 
 ## crates/qingjian-lm
 
