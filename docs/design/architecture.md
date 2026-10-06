@@ -399,7 +399,9 @@ CC-CEDICT 表（`dict-convert cedict`）保留为备用来源，覆盖面广但�
   （`com/mode/button.rs`，图标现画「中」/「英」，第三方 TIP 单写转换模式 compartment 不出这个指示器），另外顺带写一份转换模式 compartment
   （`GUID_COMPARTMENT_KEYBOARD_INPUTMODE_CONVERSION` 的 `TF_CONVERSIONMODE_NATIVE` 位，`com/mode/mod.rs`）。这条 compartment 还**反向同步**：激活时对它挂
   `ITfCompartmentEventSink`（`com/mode/conversion.rs`），用户点任务栏中 / 英（或别的输入指示器途径）改了转换模式时 `OnChange` 读回 `NATIVE` 位、与当前
-  `english_mode` 不同才翻转（相同即我们自己写的那次，忽略以防回环），翻转顺带走 `update_mode_indicator` → 悬浮状态条也一起同步；Caps Lock 只管大小写，
+  `english_mode` 不同才翻转（相同即我们自己写的那次，忽略以防回环），翻转顺带走 `update_mode_indicator` → 悬浮状态条也一起同步。但反向同步有两道跳过：一是写 compartment 失败的进程
+  （开始菜单 / 搜索 / 设置等沉浸式宿主，`SetValue` 返回 `0x8000FFFF`）里 compartment 不可信，`ModeState::compartment_ok` 记下失败后跳过，否则读回的默认值（`NATIVE` 未亮）会把青简误切成英文；
+  二是失焦时系统 / 其他输入法常把 compartment 重置成默认值，这种噪声也跳过（`Shared::foreground` 为假时不反向同步；用户点青简自己的语言栏按钮走 `toggle_mode`，不经这里）。Caps Lock 只管大小写，
   亮着无论中英模式都直接出大写英文（微软拼音式）。`KeyModifiers` 因此带 `caps`（大小写）与 `english_mode`（持久模式）两个非物理位，
   字母大小写按 `shift XOR caps`。Router（`dispatch/key/input.rs`）里 `english = caps || english_mode`、候选只在 `english_mode && !caps && 应用允许` 时给，
   `[general] english_candidates` 关着就是纯直通。macOS 的「先上屏、再把这个键交给应用」在 Windows 上会乱序

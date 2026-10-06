@@ -10,6 +10,11 @@ pub(crate) struct ModeState {
     /// `true` 是英文模式。
     english: Cell<bool>,
 
+    /// 上次写转换模式 compartment 是否成功。沉浸式 / AppContainer 进程（开始菜单 / 搜索 / 设置）里
+    /// `SetValue` 会失败，此时 compartment 的值不可信，不应让它反向同步把青简切走（见
+    /// [`sync_from_conversion_mode`](crate::com::service::TextService_Impl::sync_from_conversion_mode)）。
+    compartment_ok: Cell<bool>,
+
     /// 系统登记进来的语言栏更新回调；由 [`super::ModeButton`] 的 `ITfSource` 登记 / 撤销。
     pub(super) sink: RefCell<Option<ITfLangBarItemSink>>,
 }
@@ -18,6 +23,7 @@ impl ModeState {
     pub(crate) fn new() -> Rc<Self> {
         Rc::new(Self {
             english: Cell::new(false),
+            compartment_ok: Cell::new(true),
             sink: RefCell::new(None),
         })
     }
@@ -28,6 +34,15 @@ impl ModeState {
 
     pub(crate) fn set_english(&self, english: bool) {
         self.english.set(english);
+    }
+
+    /// 上次写转换模式 compartment 是否成功。失败时 compartment 不可信，反向同步要跳过。
+    pub(crate) fn compartment_ok(&self) -> bool {
+        self.compartment_ok.get()
+    }
+
+    pub(crate) fn set_compartment_ok(&self, ok: bool) {
+        self.compartment_ok.set(ok);
     }
 
     /// 通知系统重取图标 / 文字。

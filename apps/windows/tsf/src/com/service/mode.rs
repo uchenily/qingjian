@@ -22,11 +22,19 @@ impl TextService_Impl {
     }
 
     /// 语言栏按钮换图标、写转换模式 compartment、把模式推给 Server（悬浮状态条）。
+    /// 写 compartment 失败时记下：沉浸式进程里 compartment 不可信，后续反向同步要跳过，
+    /// 否则读回的默认值（`NATIVE` 未亮）会把青简误切成英文。
     pub(super) fn refresh_mode_indicator(&self) {
         let english = self.mode_state.english();
         self.mode_state.notify();
         if let Some(thread_mgr) = self.thread_mgr.borrow().as_ref() {
-            mode::set_indicator(thread_mgr, self.client_id.get(), english);
+            match mode::set_indicator(thread_mgr, self.client_id.get(), english) {
+                Ok(()) => self.mode_state.set_compartment_ok(true),
+                Err(error) => {
+                    log(&format!("设置中英指示器失败: {error}"));
+                    self.mode_state.set_compartment_ok(false);
+                }
+            }
         }
         if let Some(client) = self.engine.borrow_mut().as_mut()
             && let Err(error) = client.mode_changed(english)
@@ -52,7 +60,17 @@ impl TextService_Impl {
     }
 
     /// 用户在任务栏点了中 / 英：读回 `NATIVE` 位，与当前不同才切（相同是自己那次写触发的，防回环）。
+    /// 写 compartment 失败的进程（开始菜单 / 搜索 / 设置等沉浸式宿主）里 compartment 不可信，
+    /// 跳过反向同步——青简自己的 `mode_state` 才是真相，否则会被默认值（英文）误切。
+    /// 失焦时系统 / 其他输入法常把 compartment 重置成默认值（英文），这种噪声也不该反向同步
+    /// （用户点青简自己的语言栏按钮走 `toggle_mode`，不经这里）。
     pub(super) fn sync_from_conversion_mode(&self) {
+        if !self.mode_state.compartment_ok() {
+            return;
+        }
+        if !self.shared.foreground() {
+            return;
+        }
         let Some(thread_mgr) = self.thread_mgr.borrow().clone() else {
             return;
         };

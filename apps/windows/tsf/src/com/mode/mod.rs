@@ -13,18 +13,15 @@ use windows::Win32::UI::TextServices::{
 };
 use windows::core::{Interface, Result};
 
-use crate::com::log::log;
-
 pub(crate) use self::button::ModeButton;
 pub(crate) use self::state::ModeState;
 
 const NATIVE: i32 = TF_CONVERSIONMODE_NATIVE as i32;
 
-/// 失败只记日志：指示器不动不影响打字。
-pub(crate) fn set_indicator(thread_mgr: &ITfThreadMgr, tid: u32, english: bool) {
-    if let Err(error) = write_conversion_mode(thread_mgr, tid, english) {
-        log(&format!("设置中英指示器失败: {error}"));
-    }
+/// 写转换模式 compartment（任务栏中 / 英指示器）。返回成功与否：沉浸式 / AppContainer 进程里
+/// `SetValue` 会失败（`0x8000FFFF`），调用方据此决定要不要信任后续的 compartment 反向同步。
+pub(crate) fn set_indicator(thread_mgr: &ITfThreadMgr, tid: u32, english: bool) -> Result<()> {
+    write_conversion_mode(thread_mgr, tid, english)
 }
 
 pub(crate) fn conversion_compartment(thread_mgr: &ITfThreadMgr) -> Result<ITfCompartment> {
@@ -32,7 +29,8 @@ pub(crate) fn conversion_compartment(thread_mgr: &ITfThreadMgr) -> Result<ITfCom
     unsafe { mgr.GetCompartment(&GUID_COMPARTMENT_KEYBOARD_INPUTMODE_CONVERSION) }
 }
 
-/// `NATIVE` 未点亮 = 英文。读不到按中文起算。
+/// `NATIVE` 未点亮 = 英文。读不到（没设过 / 类型不对）按中文起算：compartment 还没被任何 TIP
+/// 写过时不应误判成英文。
 pub(crate) fn is_english(compartment: &ITfCompartment) -> bool {
     read_mode(compartment) & NATIVE == 0
 }
