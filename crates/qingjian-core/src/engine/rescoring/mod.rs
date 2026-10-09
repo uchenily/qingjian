@@ -76,6 +76,7 @@ impl Engine {
                 }
             }
         }
+        let before = paths.first().map(|p| p.text.clone()).unwrap_or_default();
         let lambda = self.neural_weight;
         for path in paths.iter_mut() {
             let neural = cache.get(&path.text).expect("filled above");
@@ -86,6 +87,10 @@ impl Engine {
                 .partial_cmp(&a.score)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
+        let after = paths.first().map(|p| p.text.clone()).unwrap_or_default();
+        if before != after {
+            tracing::info!(%before, %after, "整句重排改变候选顺序");
+        }
         self.last_rescored.set(true);
     }
 
