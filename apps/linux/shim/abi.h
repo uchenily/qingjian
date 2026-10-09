@@ -75,6 +75,11 @@ struct QingjianFrame {
 /// 初始化：装配 Engine 并装进单例。返回 0 成功，非 0 是错误码。
 int32_t qingjian_init(void);
 
+/// 设应用前文（光标前的真实文本），给神经重排模型看。cursor_chars 是光标在 text 里的
+/// 字符偏移，Engine 取光标前最后 64 个字符。传 nullptr 表示取不到，Engine 退回本会话历史。
+/// shim 在 qingjian_key_event 前调。
+void qingjian_set_context(const char* text, uint32_t cursor_chars);
+
 /// 释放单例。fcitx5 卸载 addon 时调。
 void qingjian_shutdown(void);
 

@@ -207,6 +207,19 @@ void QingjianEngine::keyEvent(const fcitx::InputMethodEntry& /*entry*/,
     QingjianFrame frame = {};
     char commit_buf[256] = {};
 
+    // 取光标前文本给神经重排模型当上下文（与 macOS / Windows 壳对齐）。
+    // 应用不支持 surrounding text 时传 nullptr，Engine 退回本会话历史。
+    const char* context_ptr = nullptr;
+    uint32_t cursor_chars = 0;
+    if (ic->capabilityFlags().test(fcitx::CapabilityFlag::SurroundingText)) {
+        const auto& surrounding = ic->surroundingText();
+        if (surrounding.isValid() && !surrounding.text().empty()) {
+            context_ptr = surrounding.text().c_str();
+            cursor_chars = surrounding.cursor();
+        }
+    }
+    qingjian_set_context(context_ptr, cursor_chars);
+
     int32_t result = qingjian_key_event(
         static_cast<uint32_t>(key.sym()),
         static_cast<uint32_t>(key.code()),

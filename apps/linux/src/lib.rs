@@ -73,6 +73,28 @@ pub extern "C" fn qingjian_shutdown() {
 /// # Safety
 /// `app` 可为空指针；`out_frame` 与 `out_commit` 要指向足够大的有效内存（`commit_len` 是 `out_commit` 容量），
 /// 调用方用完 `out_frame` 指向的帧后要调 [`qingjian_frame_free`] 归还字符串。
+/// 设应用前文（光标前的真实文本），给神经重排模型看。`cursor_chars` 是光标在 `text` 里的
+/// 字符偏移（fcitx5 SurroundingText::cursor() 的语义），Engine 取光标前最后 64 个字符。
+/// 传 `nullptr` 表示取不到，Engine 退回本会话历史。shim 在 `qingjian_key_event` 前调。
+/// # Safety
+/// `text` 要是合法的 C 字符串（可为空串或 `nullptr`）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qingjian_set_context(text: *const c_char, cursor_chars: u32) {
+    let before = if text.is_null() {
+        None
+    } else {
+        match unsafe { CStr::from_ptr(text) }.to_str() {
+            Ok(s) if !s.is_empty() => {
+                // cursor_chars 是字符偏移，取光标前的字符
+                let before_cursor: String = s.chars().take(cursor_chars as usize).collect();
+                if before_cursor.is_empty() { None } else { Some(before_cursor) }
+            }
+            _ => None,
+        }
+    };
+    with_host(|host| host.engine.set_rescoring_context(before));
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qingjian_key_event(
     sym: u32,
