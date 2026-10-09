@@ -279,9 +279,6 @@ impl Host {
             (Setting::LocalModelEnabled, SettingValue::Bool(on)) => {
                 self.settings.set_bool("model", "enabled", on);
             }
-            (Setting::ChineseFirst, SettingValue::Bool(on)) => {
-                self.settings.set_bool("general", "chinese_first", on);
-            }
             // 弹出菜单第 0 项是「关」，之后按 ShuangpinScheme::ALL 的顺序
             (Setting::Shuangpin, SettingValue::Index(index)) => {
                 let key = index

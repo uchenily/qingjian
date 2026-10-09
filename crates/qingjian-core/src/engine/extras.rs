@@ -54,8 +54,8 @@ impl Engine {
     }
 
     /// 中英混输：整段输入是英文词就把它加进候选。
-    /// 缺省作为拼音「不像话」（切不动、或除末尾外还有声母缩写 / 残缺音节）时排第一，否则排第二；
-    /// 开了中文优先（`chinese_first`）整句 / 首个中文候选已经在前，英文词排第二。没有中文候选时总在第一。
+    /// 拼音「不像话」（切不动、或除末尾外还有声母缩写 / 残缺音节）时排第一，否则排第二；
+    /// 但用户在这段输入下选英文词的次数反超中文首选时，英文词排第一——选过的词该靠前，不管拼音像不像话。
     pub(super) fn insert_english(&self, items: &mut Vec<Candidate>, unlikely_pinyin: bool) {
         let lists = self.english_lists();
         if lists.is_empty() {
@@ -74,13 +74,15 @@ impl Engine {
         };
         let word = lists.iter().find_map(|words| words.get(text));
         // 这段字母下用户选中文词（`key` → 可以）比选英文词的次数多：中文词留在第一，英文让到后面；
-        // 拼音再不像话也是他自己教的
+        // 拼音再不像话也是他自己教的。选英文词的次数反超时英文排第一（`nice` 选多了也该排前），
+        // 不依赖拼音像不像话
         let chosen = items
             .first()
             .filter(|c| c.kind == CandidateKind::Chinese)
             .map_or(0, |c| self.learner.choice_weight(text, &c.text));
         let english_weight = word.map_or(0, |w| self.learner.weight(w));
-        let english_first = !self.chinese_first && unlikely_pinyin && chosen <= english_weight;
+        let english_first =
+            chosen <= english_weight && (unlikely_pinyin || english_weight > 0);
         let mut position = if items.is_empty() || english_first {
             0
         } else {
@@ -123,7 +125,7 @@ impl Engine {
     }
 
     /// emoji 候选：前几个中文候选里有配 emoji 的，emoji 紧跟在那个词后面，右侧标注它对应的词。
-    /// 词后面紧挨着的英文词候选（中文优先时 `key` → 可以、key）不被 emoji 挤开，emoji 排在它之后。
+    /// 词后面紧挨着的英文词候选（`nice` → 你测、nice）不被 emoji 挤开，emoji 排在它之后。
     pub(super) fn insert_emoji(&self, items: &mut Vec<Candidate>) {
         let Some(table) = &self.emoji else { return };
         let mut inserted = 0;

@@ -38,7 +38,6 @@ impl Component for Settings {
                 self.save("general", "shuangpin", general::SHUANGPIN[i].1);
             }
             Message::Zhuyin(on) => self.save("general", "zhuyin", on),
-            Message::ChineseFirst(on) => self.save("general", "chinese_first", on),
             Message::FullWidthPunctuation(on) => {
                 self.save("general", "full_width_punctuation", on);
             }

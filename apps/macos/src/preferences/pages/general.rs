@@ -6,9 +6,7 @@ use objc2_app_kit::{NSButton, NSPopUpButton};
 use qingjian_core::{Language, ShuangpinScheme};
 use qingjian_platform::{Config, MAX_PAGE_SIZE};
 
-use crate::preferences::controls::{
-    checkbox, language_label, note, row_checkbox, row_popup, select, set_checked,
-};
+use crate::preferences::controls::{language_label, note, row_popup, select};
 use crate::preferences::layout::Layout;
 use crate::preferences::setting::Setting;
 use crate::preferences::target::PreferencesTarget;
@@ -22,9 +20,6 @@ pub struct GeneralPage {
 
     /// 双拼方案（第 0 项是关）。
     shuangpin: Retained<NSPopUpButton>,
-
-    /// 中英混输时中文候选排在英文词前。
-    chinese_first: Retained<NSButton>,
 
     /// 学习语言弹出菜单里各项对应的语言。
     languages: Vec<Language>,
@@ -96,23 +91,10 @@ impl GeneralPage {
             mtm,
             "仅影响标点，字母和数字保持半角；自定义短语原样输出。设置会保存。 ",
         );
-        let chinese_first = checkbox(
-            mtm,
-            "输入拼音时中文候选排在英文词前面",
-            Setting::ChineseFirst,
-            target,
-        );
-        row_checkbox(layout, &chinese_first);
-        note(
-            layout,
-            mtm,
-            "勾上后整段输入是英文词时（hello、key）英文词排第二，空格上屏的仍是中文；不勾（缺省）拼音不成立的输入英文词排第一。",
-        );
         Self {
             learning_language,
             page_size,
             shuangpin,
-            chinese_first,
             languages: languages.to_vec(),
             punctuation,
         }
@@ -140,6 +122,5 @@ impl GeneralPage {
                     .map_or(0, |i| i + 1)
             })),
         );
-        set_checked(&self.chinese_first, general.chinese_first);
     }
 }

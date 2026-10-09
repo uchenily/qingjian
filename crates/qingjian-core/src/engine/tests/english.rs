@@ -238,12 +238,7 @@ fn english_word_yields_to_a_chinese_word_the_user_keeps_choosing() {
             .unwrap();
         engine.commit(&candidate);
     };
-    // 开了中文优先：ke'y 再不像话，中文词也在前、英文第二
-    engine.set_chinese_first(true);
-    engine.set_input("key");
-    assert_eq!(first_two(&engine), ("可以".into(), "key".into()));
-    // 缺省关：末尾落单一个字母、拼音不像话，英文词在前
-    engine.set_chinese_first(false);
+    // 末尾落单一个字母、拼音不像话：冷启动英文词在前
     engine.set_input("key");
     assert_eq!(first_two(&engine), ("key".into(), "可以".into()));
     // 这段字母下选过一次 可以：中文在前，英文退到第二
@@ -498,4 +493,37 @@ fn pinyin_like_english_tail_competes_with_the_plain_reading() {
     assert_eq!(mixed.syllables, ["wo", "de", "database"]);
     assert_eq!(engine.commit(&mixed), "我的database");
     assert!(engine.composition().is_empty());
+}
+
+/// 拼音能切成合法音节的英文词（`nice` → ni ce、`he` → he）：冷启动英文排第二（被整句挤到第三），
+/// 用户多选几次后英文排第一。去掉 `chinese_first` 开关后靠用户选择次数提升，不再被「拼音像不像话」卡死。
+#[test]
+fn english_word_that_is_also_valid_pinyin_rises_with_user_choices() {
+    let dictionary = Dictionary::parse("你	ni	9000\n测	ce	8000\n呢	ne	3000\n").unwrap();
+    let mut engine = Engine::new(dictionary)
+        .with_english(WordList::parse("nice\n").unwrap())
+        .with_learner(Box::new(CountingLearner(HashMap::new())));
+    engine.set_shuangpin(Some(Scheme::Xiaohe));
+    let first = |engine: &Engine| texts_of(engine).into_iter().next().unwrap();
+    let pick = |engine: &mut Engine, text: &str| {
+        engine.set_input("nice");
+        let candidate = engine
+            .query()
+            .unwrap()
+            .candidates
+            .items
+            .into_iter()
+            .find(|c| c.text == text)
+            .unwrap();
+        engine.commit(&candidate);
+    };
+    // 冷启动：ni ce 是合法拼音，整句 你测 在前，nice 不是第一
+    engine.set_input("nice");
+    assert_ne!(first(&engine), "nice");
+    assert!(texts_of(&engine).iter().any(|t| t == "nice"));
+    // 选 nice 几次后它排第一
+    pick(&mut engine, "nice");
+    pick(&mut engine, "nice");
+    engine.set_input("nice");
+    assert_eq!(first(&engine), "nice");
 }

@@ -37,10 +37,6 @@ pub struct GeneralConfig {
     /// 组句中的拼音显示在行内、候选窗口还是两处都显示。
     pub preedit: PreeditMode,
 
-    /// 中文模式下中英混输时中文候选总排在英文词前面。缺省关：拼音不像话的输入（`hello`）英文词排第一，
-    /// 常在中文模式里打英文词的人不受影响；想要中文永远在前的自己打开。
-    pub chinese_first: bool,
-
     /// 中文模式下不在组句时敲的标点转成全角（`，。？！` 等，数字后的 `.` 保持半角）。
     /// Windows 悬浮状态条上可点切换；macOS 在偏好设置中选择默认模式。
     pub full_width_punctuation: bool,
@@ -71,7 +67,6 @@ impl Default for GeneralConfig {
             theme: ThemeMode::default(),
             layout: LayoutMode::default(),
             preedit: PreeditMode::default(),
-            chinese_first: false,
             full_width_punctuation: true,
             english_full_width_punctuation: false,
             shuangpin: String::new(),

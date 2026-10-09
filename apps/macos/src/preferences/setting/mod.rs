@@ -74,9 +74,6 @@ pub enum Setting {
     /// `[general] preedit`，弹出菜单。
     Preedit,
 
-    /// `[general] chinese_first`，勾选框：中英混输时中文候选排在英文词前。
-    ChineseFirst,
-
     /// `[shortcut] translation`，快捷键录制按钮（只记修饰键）。
     TranslationKeys,
 
@@ -134,7 +131,6 @@ impl Setting {
             Self::OpenConfigFile => 11,
             Self::Layout => 12,
             Self::Preedit => 13,
-            Self::ChineseFirst => 42,
             Self::TranslationKeys => 15,
             Self::TranslationSecondKeys => 16,
             Self::ResetShortcuts => 18,
@@ -173,7 +169,6 @@ impl Setting {
             11 => Self::OpenConfigFile,
             12 => Self::Layout,
             13 => Self::Preedit,
-            42 => Self::ChineseFirst,
             15 => Self::TranslationKeys,
             16 => Self::TranslationSecondKeys,
             18 => Self::ResetShortcuts,
