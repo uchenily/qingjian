@@ -109,7 +109,6 @@ impl Engine {
         if wanted.is_empty() {
             return false;
         }
-        tracing::debug!(texts = wanted.len(), "神经重打分请求");
         worker.submit(cache.context().to_owned(), wanted);
         true
     }
