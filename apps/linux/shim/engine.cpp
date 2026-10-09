@@ -16,6 +16,7 @@
 #include <fcitx/text.h>
 #include <fcitx-utils/key.h>
 #include <fcitx-utils/log.h>
+#include <fcitx-utils/event.h>
 
 #include <cstring>
 #include <memory>
@@ -132,6 +133,16 @@ QingjianEngine::QingjianEngine(fcitx::Instance* instance)
     if (qingjian_init() != 0) {
         FCITX_ERROR() << "青简 Linux 初始化失败";
     }
+    // 起一个重复定时器驱动本地整句模型重排：周期性调 qingjian_poll，
+    // 有非空帧就重画当前 InputContext 的候选窗。Rust 侧没在组句 / 没在等重排时 poll 返回 0，开销很小。
+    auto* loop = &instance_->eventLoop();
+    poll_timer_ = loop->addTimeEvent(
+        CLOCK_MONOTONIC, fcitx::now(CLOCK_MONOTONIC) + POLL_INTERVAL_USEC,
+        POLL_INTERVAL_USEC,
+        [this](fcitx::EventSourceTime* /*timer*/, uint64_t /*usec*/) {
+            onPollTick();
+            return true; // 重复
+        });
 }
 
 QingjianEngine::~QingjianEngine() {
@@ -162,6 +173,9 @@ void QingjianEngine::keyEvent(const fcitx::InputMethodEntry& /*entry*/,
     if (!ic) {
         return;
     }
+
+    // 记下当前 InputContext，重排定时器用它重画
+    current_ic_ = ic;
 
     // 释放事件一律放行（与 macOS / Windows 一致：只在 key down 处理）
     if (keyEvent.isRelease()) {
@@ -206,6 +220,9 @@ void QingjianEngine::keyEvent(const fcitx::InputMethodEntry& /*entry*/,
 void QingjianEngine::reset(const fcitx::InputMethodEntry& /*entry*/,
                            fcitx::InputContextEvent& event) {
     auto* ic = event.inputContext();
+    if (current_ic_ == ic) {
+        current_ic_ = nullptr;
+    }
     char commit_buf[256] = {};
     qingjian_reset(commit_buf, sizeof(commit_buf));
     if (commit_buf[0] != '\0') {
@@ -273,6 +290,18 @@ void QingjianEngine::hidePanel(fcitx::InputContext* ic) {
     panel.setCandidateList(nullptr);
     ic->updatePreedit();
     ic->updateUserInterface(fcitx::UserInterfaceComponent::InputPanel);
+}
+
+void QingjianEngine::onPollTick() {
+    // 没有活跃的输入上下文就不轮询
+    auto* ic = current_ic_;
+    if (!ic) return;
+    QingjianFrame frame = {};
+    int32_t got = qingjian_poll(&frame);
+    if (got != 1) return;
+    // 有重排后的帧：重画当前候选窗
+    paintFrame(ic, frame);
+    qingjian_frame_free(&frame);
 }
 
 } // namespace qingjian

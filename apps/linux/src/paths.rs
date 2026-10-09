@@ -108,6 +108,28 @@ pub fn user_dicts_dir() -> Option<PathBuf> {
     Some(dir)
 }
 
+/// 本地整句模型（`.qjm` 单文件，或开发时的三件套目录）：
+/// 用户目录 `model/` 里有就用它（自己训的），否则用随包的 `model/`；都没有为 `None`。
+/// 与 macOS 的 `paths::model_path` 对齐。
+pub fn model_path() -> Option<std::path::PathBuf> {
+    if let Some(dir) = user_dir() {
+        let user = dir.join("model");
+        if let Some(found) = qingjian_neural::find_model(&user) {
+            return Some(found);
+        }
+    }
+    // 随包：开发布局 `data/model/`，安装布局 `model/`
+    let bundled = data_root().and_then(|root| {
+        let dev = root.join("data/model");
+        if dev.is_dir() {
+            return Some(dev);
+        }
+        let installed = root.join("model");
+        installed.is_dir().then_some(installed)
+    });
+    bundled.and_then(|dir| qingjian_neural::find_model(&dir))
+}
+
 /// 日志目录：`~/.config/qingjian/logs/`。
 pub fn log_dir() -> Option<PathBuf> {
     let dir = user_dir()?.join("logs");

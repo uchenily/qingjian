@@ -13,6 +13,7 @@ mod dispatch;
 mod error;
 mod frame;
 mod paths;
+mod rescore;
 mod session;
 
 use std::ffi::CStr;
@@ -93,7 +94,12 @@ pub unsafe extern "C" fn qingjian_key_event(
         is_release,
         app,
     };
-    let result = with_host(|host| host.dispatch.key_event(&mut host.engine, &input));
+    let result = with_host(|host| {
+        let outcome = host.dispatch.key_event(&mut host.engine, &input);
+        // 按键后组句变了：有整句路径等着打分就起防抖计时，shim 的轮询会驱动重排
+        host.schedule_rescoring();
+        outcome
+    });
     let Some(result) = result else {
         return KeyResult::Passthrough.to_c_int();
     };
@@ -131,13 +137,13 @@ pub unsafe extern "C" fn qingjian_reset(out_commit: *mut c_char, commit_len: usi
     }
 }
 
-/// 轮询异步结果（云联想、释义兜底、神经重排）。fcitx5 主循环空闲时调，返回非空帧时 shim 重画候选窗。
-/// 没有更新时 `out_frame` 写成空帧。
+/// 轮询异步结果（本地整句模型重排）。shim 的 fcitx5 定时器周期性调，返回非空帧时重画候选窗。
+/// 没有更新时返回 0（`out_frame` 不动）。
 /// # Safety
 /// `out_frame` 要指向有效的 `Frame` 内存；调用方用完要调 [`qingjian_frame_free`]。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qingjian_poll(out_frame: *mut Frame) -> c_int {
-    let frame = with_host(|host| host.dispatch.poll(&mut host.engine));
+    let frame = with_host(|host| host.poll_rescoring());
     if let Some(Some(frame)) = frame {
         unsafe { write_frame(out_frame, frame) };
         1

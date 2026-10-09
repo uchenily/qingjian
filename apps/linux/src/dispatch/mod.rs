@@ -129,7 +129,8 @@ impl Dispatch {
         KeyOutcome::committed(commit, Frame::empty())
     }
 
-    /// 轮询异步结果。云联想与释义兜底已移除，当前无异步结果，恒返回 `None`。
+    /// 轮询异步结果。本地整句模型重排由 [`crate::assembly::Host::poll_rescoring`] 驱动，这里不再用。
+    #[allow(dead_code)]
     pub fn poll(&mut self, _engine: &mut Engine) -> Option<Frame> {
         None
     }

@@ -4,12 +4,16 @@
 
 #include <fcitx/inputmethodengine.h>
 #include <fcitx/instance.h>
+#include <fcitx-utils/event.h>
 
 #include "abi.h"
 
 #include <string>
 
 namespace qingjian {
+
+/// qingjian_poll 的轮询间隔（微秒），与 Rust 侧 `rescore::POLL_INTERVAL`（20ms）对齐。
+constexpr uint64_t POLL_INTERVAL_USEC = 20000;
 
 /// fcitx5 输入法引擎。每个 InputContext 对应一次按键调用；Rust 侧是进程级单例，
 /// 所以这里不持状态，只做「fcitx5 事件 → C ABI → fcitx5 InputPanel」的翻译。
@@ -44,7 +48,14 @@ private:
     /// 收起候选窗。
     void hidePanel(fcitx::InputContext* ic);
 
+    /// 定时器到点：调 qingjian_poll，有非空帧就重画当前候选窗。
+    void onPollTick();
+
     fcitx::Instance* instance_;
+    /// 驱动本地整句模型重排的重复定时器。
+    std::unique_ptr<fcitx::EventSourceTime> poll_timer_;
+    /// 最近一次按键的 InputContext，重排定时器用它重画。
+    fcitx::InputContext* current_ic_ = nullptr;
 };
 
 } // namespace qingjian

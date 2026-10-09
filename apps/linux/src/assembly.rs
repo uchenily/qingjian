@@ -2,24 +2,36 @@
 //! Windows 的 `assembly::assemble` 一致。
 
 use std::path::Path;
+use std::sync::mpsc::{Receiver, TryRecvError, channel};
 use std::time::Instant;
 
 use qingjian_core::{EmojiTable, Engine, Language};
 use qingjian_dictionary::{Dictionary, WordList};
 use qingjian_learning::{FrequencyLearner, InputLog, UsageStats, VocabularyBook};
 use qingjian_lm::BigramModel;
+use qingjian_neural::{CharScorer, NeuralError};
 use qingjian_platform::extra_dictionaries;
-use qingjian_platform::{Config, ConfigError, LogLevel};
+use qingjian_platform::{Config, ConfigError, LocalModelConfig, LogLevel};
 use qingjian_translate::{Glossary, LayeredTranslator, LevelTable, PersonalGlossary};
 
 use crate::dispatch::Dispatch;
 use crate::error::InitError;
 use crate::paths;
+use crate::rescore::RescoreState;
 
 /// 装配好的进程级单例。
 pub(crate) struct Host {
     pub(crate) engine: Engine,
     pub(crate) dispatch: Dispatch,
+
+    /// 正在后台加载的模型；加载完接到 Engine 上就清掉。
+    model_loader: Option<Receiver<Result<CharScorer, NeuralError>>>,
+
+    /// 上次套用的 `[model]`，变了才重载 / 卸载。
+    applied_model: Option<LocalModelConfig>,
+
+    /// 本地整句模型的防抖与轮询节拍。
+    rescore: RescoreState,
 }
 
 /// 随包释义表覆盖的语言（与 macOS 一致；有表才算）。
@@ -38,7 +50,15 @@ pub(crate) fn init() -> Result<Host, InitError> {
     }
     let engine = assemble_engine(&config)?;
     let dispatch = Dispatch::new(&config);
-    let mut host = Host { engine, dispatch };
+    let mut host = Host {
+        engine,
+        dispatch,
+        model_loader: None,
+        applied_model: None,
+        rescore: RescoreState::default(),
+    };
+    // 本地整句模型：按 [model] enabled 决定要不要后台加载
+    host.apply_model_config(&config.model);
     host.engine.log_session(env!("CARGO_PKG_VERSION"), "linux");
     tracing::info!(version = env!("CARGO_PKG_VERSION"), "青简 Linux 就绪");
     Ok(host)
@@ -285,5 +305,136 @@ fn load_language_model() -> Option<BigramModel> {
             tracing::warn!(%error, "语言模型 TSV 加载失败，退化为一元词频");
             None
         }
+    }
+}
+
+// ---- 本地整句模型（与 macOS `host/model.rs`、Windows `dispatch/rescore` 对齐）----
+
+impl Host {
+    /// `[model]` 变了才重载 / 卸载；启动时也走这里。
+    pub(crate) fn apply_model_config(&mut self, config: &LocalModelConfig) {
+        if self.applied_model.as_ref() == Some(config) {
+            return;
+        }
+        self.applied_model = Some(config.clone());
+        if config.enabled {
+            self.load_local_model();
+        } else {
+            self.unload_local_model();
+        }
+    }
+
+    /// 在后台线程加载模型并预热（第一次前向要几百毫秒），加载完由 [`Self::attach_loaded_model`] 接上。
+    /// 没有模型文件就什么都不做。
+    fn load_local_model(&mut self) {
+        if self.model_loader.is_some() || self.engine.has_sentence_scorer() {
+            return;
+        }
+        let Some(path) = paths::model_path() else {
+            tracing::info!("没有本地整句模型文件，不重排");
+            return;
+        };
+        let (tx, rx) = channel::<Result<CharScorer, NeuralError>>();
+        let spawned = std::thread::Builder::new()
+            .name("qingjian-model-load".to_owned())
+            .spawn(move || {
+                let started = Instant::now();
+                let loaded = CharScorer::load(&path).and_then(|scorer| {
+                    scorer.score("", &["的"])?;
+                    Ok(scorer)
+                });
+                if loaded.is_ok() {
+                    tracing::info!(
+                        path = %path.display(),
+                        total_ms = started.elapsed().as_millis(),
+                        "本地整句模型已加载并预热"
+                    );
+                }
+                let _ = tx.send(loaded);
+            });
+        match spawned {
+            Ok(_) => self.model_loader = Some(rx),
+            Err(error) => tracing::warn!(%error, "起不了模型加载线程，本地整句模型不用"),
+        }
+    }
+
+    /// 卸掉模型（配置关掉）。
+    fn unload_local_model(&mut self) {
+        self.model_loader = None;
+        self.engine.set_async_sentence_scorer(None);
+        self.rescore.stop();
+        tracing::info!("本地整句模型已卸载（[model] enabled = false）");
+    }
+
+    /// 加载线程有结果了就接到 Engine 上；每次轮询顺手看一眼，不阻塞。
+    fn attach_loaded_model(&mut self) {
+        let Some(rx) = &self.model_loader else {
+            return;
+        };
+        match rx.try_recv() {
+            Ok(Ok(scorer)) => {
+                self.engine
+                    .set_async_sentence_scorer(Some(Box::new(scorer)));
+                self.model_loader = None;
+                // 模型上线了：日志里补一条会话信息，之后的条目知道重排开着
+                self.engine.log_session(env!("CARGO_PKG_VERSION"), "linux");
+            }
+            Ok(Err(error)) => {
+                tracing::warn!(%error, "本地整句模型加载失败，不重排");
+                self.model_loader = None;
+            }
+            Err(TryRecvError::Empty) => {}
+            Err(TryRecvError::Disconnected) => self.model_loader = None,
+        }
+    }
+
+    /// 每次查询之后：有整句路径等着打分就起防抖计时。
+    pub(crate) fn schedule_rescoring(&mut self) {
+        if self.engine.rescoring_pending() {
+            self.rescore.schedule();
+        } else {
+            self.rescore.stop();
+        }
+    }
+
+    /// 轮询入口（由 shim 的 fcitx5 定时器周期性调 `qingjian_poll` 驱动）：
+    /// 接上加载好的模型、推进重排节拍，分回来了就重查重画，返回新帧。
+    /// 没有更新返回 `None`。
+    pub(crate) fn poll_rescoring(&mut self) -> Option<crate::frame::Frame> {
+        self.attach_loaded_model();
+        if !self.rescore.active() {
+            return None;
+        }
+        if self.engine.composition().is_empty() {
+            self.rescore.stop();
+            return None;
+        }
+        let (should_request, should_poll) = self.rescore.advance();
+        if should_request {
+            if self.engine.request_rescoring() {
+                self.rescore.start_polling();
+            } else {
+                self.rescore.stop();
+            }
+        }
+        if should_poll {
+            if !self.engine.poll_rescoring() {
+                // 等太久多半是前文变了、结果作废；真卡住也只是这轮不重排
+                if self.rescore.expired() {
+                    tracing::debug!("等本地整句模型超时，本轮不重排");
+                    self.rescore.stop();
+                }
+                return None;
+            }
+            self.rescore.stop();
+            // 用户翻过页或动过高亮就不打扰
+            if self.dispatch.session().page() != 0 || self.dispatch.session().navigated() {
+                return None;
+            }
+            // 分回来了：重查一次、重画当前页
+            self.dispatch.refresh(&mut self.engine);
+            return Some(self.dispatch.current_frame(&self.engine));
+        }
+        None
     }
 }

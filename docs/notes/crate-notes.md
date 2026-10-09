@@ -117,6 +117,15 @@ IMK 输入法，源码按 `app / host / imk / candidates / menubar / preferences
   结果到了重查一次只重画当前页（翻过页 / 动过高亮不动）；`[model] enabled` 开关在偏好设置「高级」页。
 - 端到端验证可用 `osascript` 的 System Events 往 TextEdit 发按键再读回文本（终端需要辅助功能权限；输入法得在中文模式）。
 
+## apps/linux
+
+fcitx5 addon：C++ shim（`shim/`，实现 `fcitx::InputMethodEngine`）+ Rust cdylib（`src/`，装配 Engine、按键分派、生成帧）。Engine 在 fcitx5 进程内（与 macOS IMK 同进程模式一致），不需要 Windows 那套 IPC。
+
+- `assembly.rs` 装配 Engine（词库 / 释义 / 学习 / 语言模型 / emoji / 英文词表），与 macOS `host::init`、Windows `assembly::assemble` 对齐；`paths.rs` 按 XDG 定位数据与用户目录（`QINGJIAN_DATA_DIR` / `/usr/share/qingjian` / `~/.local/share/qingjian` / 开发布局）。
+- 日志在 `~/.config/qingjian/logs/`（按天分文件留 7 天），级别按 `[general] log_level`（`RUST_LOG` 可覆盖）。
+- 本地整句模型：与 macOS / Windows 对齐。`paths::model_path` 找用户目录 `model/` 优先、否则随包 `model/`（`qingjian_neural::find_model`）；`assembly::Host::apply_model_config` 按 `[model] enabled` 后台加载并预热（`load_local_model`），加载完 `attach_loaded_model` 接 `set_async_sentence_scorer`。节拍由 `rescore::RescoreState`（纯 Rust，Instant 计时）记：按键后 `schedule_rescoring` 起防抖 80 ms，到点 `request_rescoring`、20 ms 轮询 `poll_rescoring`，分回来了重查重画当前页（翻过页 / 动过高亮不动）。驱动靠 shim 侧 fcitx5 重复定时器（`EventLoop::addTimeEvent`，20 ms）周期性调 `qingjian_poll`；第一版不取应用光标前文，退回本会话历史。
+- `bundle.sh` 打成 `.tar.gz`（含 `.so` + 数据 + 安装脚本），随包带 `data/model/model.qjm`（有才打包）。
+
 ## apps/windows
 
 一个产品两个 package：`server`（Server 进程：IPC 分派 + Engine + 命名管道 + 自绘候选窗与悬浮状态条）与 `tsf`（TSF 文本服务 DLL，lib 名固定 `qingjian_tsf`），

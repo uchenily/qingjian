@@ -7,13 +7,14 @@
 ```
 fcitx5 进程
 ├── libqingjian.so        ← C++ shim：实现 fcitx::InputMethodEngine
-│   ├── engine.cpp        把 fcitx5 KeyEvent 翻译成 C ABI 调用
+│   ├── engine.cpp        把 fcitx5 KeyEvent 翻译成 C ABI 调用；定时器驱动 qingjian_poll
 │   ├── factory.cpp       fcitx5 addon 工厂注册
 │   └── abi.h             Rust cdylib 的 C ABI 声明
 └── libqingjian_linux.so  ← Rust cdylib：装配 Engine、按键分派、生成帧
-    ├── lib.rs            C ABI 导出（qingjian_init / qingjian_key_event / …）
-    ├── assembly.rs       装配 Engine（词库 / 释义 / 学习 / 语言模型）
+    ├── lib.rs            C ABI 导出（qingjian_init / qingjian_key_event / qingjian_poll / …）
+    ├── assembly.rs       装配 Engine（词库 / 释义 / 学习 / 语言模型 / 本地整句模型）
     ├── dispatch/         按键→Engine 分派（与 macOS / Windows 壳对齐）
+    ├── rescore.rs        本地整句模型重排节拍（防抖 / 轮询状态）
     ├── session.rs        候选高亮 / 翻页状态
     ├── frame.rs          C ABI Frame（preedit + 候选表）
     └── paths.rs          XDG 路径 / 数据目录定位
@@ -21,6 +22,7 @@ fcitx5 进程
 
 Engine 在 fcitx5 进程内运行（与 macOS IMK 同进程模式一致），不需要 Windows 那套 IPC。
 C++ shim 只做「fcitx5 事件 → C ABI → fcitx5 InputPanel」的翻译，不碰排序 / 词库 / 翻译。
+本地整句模型的重排由 shim 的 fcitx5 定时器周期性调 `qingjian_poll` 驱动（与 macOS 的 NSTimer、Windows 的工人循环 tick 对齐）。
 
 ## 依赖
 
