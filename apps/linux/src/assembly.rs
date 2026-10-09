@@ -376,6 +376,7 @@ impl Host {
                 self.engine
                     .set_async_sentence_scorer(Some(Box::new(scorer)));
                 self.model_loader = None;
+                tracing::info!("本地整句模型已接上 Engine");
                 // 模型上线了：日志里补一条会话信息，之后的条目知道重排开着
                 self.engine.log_session(env!("CARGO_PKG_VERSION"), "linux");
             }
@@ -384,7 +385,10 @@ impl Host {
                 self.model_loader = None;
             }
             Err(TryRecvError::Empty) => {}
-            Err(TryRecvError::Disconnected) => self.model_loader = None,
+            Err(TryRecvError::Disconnected) => {
+                tracing::warn!("本地整句模型加载线程已断开");
+                self.model_loader = None;
+            }
         }
     }
 
@@ -399,15 +403,20 @@ impl Host {
 
     /// 轮询入口（由 shim 的 fcitx5 定时器周期性调 `qingjian_poll` 驱动）：
     /// 接上加载好的模型、推进重排节拍，分回来了就重查重画，返回新帧。
-    /// 没有更新返回 `None`。
-    pub(crate) fn poll_rescoring(&mut self) -> Option<crate::frame::Frame> {
+    /// 返回 `PollOutcome`：有帧重画、还在等继续轮询、闲时可以停定时器。
+    pub(crate) fn poll_rescoring(&mut self) -> PollOutcome {
         self.attach_loaded_model();
         if !self.rescore.active() {
-            return None;
+            // 没在等重排：组句空就是闲时，组句还在就继续轮询（防抖还没起）
+            return if self.engine.composition().is_empty() {
+                PollOutcome::Idle
+            } else {
+                PollOutcome::Continue
+            };
         }
         if self.engine.composition().is_empty() {
             self.rescore.stop();
-            return None;
+            return PollOutcome::Idle;
         }
         let (should_request, should_poll) = self.rescore.advance();
         if should_request {
@@ -415,6 +424,7 @@ impl Host {
                 self.rescore.start_polling();
             } else {
                 self.rescore.stop();
+                return PollOutcome::Idle;
             }
         }
         if should_poll {
@@ -423,18 +433,29 @@ impl Host {
                 if self.rescore.expired() {
                     tracing::debug!("等本地整句模型超时，本轮不重排");
                     self.rescore.stop();
+                    return PollOutcome::Idle;
                 }
-                return None;
+                return PollOutcome::Continue;
             }
             self.rescore.stop();
             // 用户翻过页或动过高亮就不打扰
             if self.dispatch.session().page() != 0 || self.dispatch.session().navigated() {
-                return None;
+                return PollOutcome::Idle;
             }
             // 分回来了：重查一次、重画当前页
             self.dispatch.refresh(&mut self.engine);
-            return Some(self.dispatch.current_frame(&self.engine));
+            return PollOutcome::Frame(self.dispatch.current_frame(&self.engine));
         }
-        None
+        PollOutcome::Continue
     }
+}
+
+/// `poll_rescoring` 的结果：有帧重画 / 还在等继续轮询 / 闲时可以停定时器。
+pub(crate) enum PollOutcome {
+    /// 重排后的帧，shim 重画候选窗；下一轮继续轮询直到闲时。
+    Frame(crate::frame::Frame),
+    /// 还在等防抖或后台打分，shim 继续驱动定时器。
+    Continue,
+    /// 没在组句 / 没在等重排，shim 可以停掉定时器，下次按键再启动。
+    Idle,
 }

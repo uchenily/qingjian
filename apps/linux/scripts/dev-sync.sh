@@ -13,7 +13,10 @@
 #   2. cmake --build apps/linux/shim/build            → apps/linux/shim/build/libqingjian.so
 #   3. sudo cp 两个 .so 到 fcitx5 addon 目录 + fcitx5 -r
 #
-# 数据文件、conf 不动（没改就不用拷）。需要 sudo 是因为 /usr/lib*/fcitx5 只有 root 能写。
+# 数据文件、conf 不动（没改就不用拷）。需要 root 是因为 /usr/lib*/fcitx5 只有 root 能写。
+# 用 pkexec 代替 sudo：图形环境弹 polkit 授权窗，不依赖终端交互输密码。
+shopt -s expand_aliases
+alias sudo='pkexec'
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"

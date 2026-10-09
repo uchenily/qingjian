@@ -49,7 +49,8 @@ private:
     void hidePanel(fcitx::InputContext* ic);
 
     /// 定时器到点：调 qingjian_poll，有非空帧就重画当前候选窗。
-    void onPollTick();
+    /// 返回 qingjian_poll 的值：1=有帧、0=继续轮询、-1=闲时（已停定时器）。
+    int32_t onPollTick();
 
     fcitx::Instance* instance_;
     /// 驱动本地整句模型重排的重复定时器。

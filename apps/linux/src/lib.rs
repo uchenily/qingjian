@@ -20,7 +20,7 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int};
 use std::sync::OnceLock;
 
-use crate::assembly::Host;
+use crate::assembly::{Host, PollOutcome};
 use crate::dispatch::KeyResult;
 use crate::dispatch::key::KeyInput;
 use crate::frame::Frame;
@@ -137,18 +137,21 @@ pub unsafe extern "C" fn qingjian_reset(out_commit: *mut c_char, commit_len: usi
     }
 }
 
-/// 轮询异步结果（本地整句模型重排）。shim 的 fcitx5 定时器周期性调，返回非空帧时重画候选窗。
-/// 没有更新时返回 0（`out_frame` 不动）。
+/// 轮询异步结果（本地整句模型重排）。shim 的 fcitx5 定时器周期性调。
+/// 返回值：`1` = 有重排后的帧（已写入 `out_frame`，重画候选窗）；
+/// `0` = 还在等防抖 / 后台打分，继续驱动定时器；
+/// `-1` = 闲时（没在组句 / 没在等重排），shim 可以停掉定时器，下次按键再启动。
 /// # Safety
 /// `out_frame` 要指向有效的 `Frame` 内存；调用方用完要调 [`qingjian_frame_free`]。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qingjian_poll(out_frame: *mut Frame) -> c_int {
-    let frame = with_host(|host| host.poll_rescoring());
-    if let Some(Some(frame)) = frame {
-        unsafe { write_frame(out_frame, frame) };
-        1
-    } else {
-        0
+    match with_host(|host| host.poll_rescoring()) {
+        Some(PollOutcome::Frame(frame)) => {
+            unsafe { write_frame(out_frame, frame) };
+            1
+        }
+        Some(PollOutcome::Continue) => 0,
+        Some(PollOutcome::Idle) | None => -1,
     }
 }
 
