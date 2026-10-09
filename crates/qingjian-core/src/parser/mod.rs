@@ -87,6 +87,7 @@ pub fn segment(input: &str) -> Result<Vec<Segmentation>, ParseError> {
                 next.push(Segmentation { syllables });
             }
         }
+        prune(&mut next);
         results = next;
     }
     prune(&mut results);
@@ -159,6 +160,7 @@ fn segment_chunk(chunk: &str, allow_partial: bool) -> Vec<Segmentation> {
                 })
                 .collect();
             best[start + len].extend(extended);
+            prune(&mut best[start + len]);
         }
     }
     let mut result = std::mem::take(&mut best[n]);

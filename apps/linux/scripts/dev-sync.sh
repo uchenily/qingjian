@@ -15,8 +15,8 @@
 #
 # 数据文件、conf 不动（没改就不用拷）。需要 root 是因为 /usr/lib*/fcitx5 只有 root 能写。
 # 用 pkexec 代替 sudo：图形环境弹 polkit 授权窗，不依赖终端交互输密码。
-shopt -s expand_aliases
-alias sudo='pkexec'
+#shopt -s expand_aliases
+#alias sudo='pkexec'
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
