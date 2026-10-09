@@ -17,6 +17,13 @@ pub fn list(dir: &Path) -> Vec<(String, PathBuf)> {
     let mut files: Vec<(String, usize, PathBuf)> = entries
         .filter_map(Result::ok)
         .map(|e| e.path())
+        .filter(|p| {
+            // 跳过隐藏文件：macOS 拷贝来的 AppleDouble 元数据（._idioms.qj 等）扩展名也是 .qj，
+            // 但不是真词库，混进来会以 ._idioms 这种名字进列表并打一堆"未打开"日志。
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| !n.starts_with('.'))
+        })
         .filter_map(|p| {
             let extension = p.extension()?.to_str()?;
             let rank = EXTENSIONS.iter().position(|e| *e == extension)?;
