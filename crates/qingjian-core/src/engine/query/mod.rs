@@ -400,7 +400,13 @@ impl Engine {
             return;
         };
         let keys = self.composition.scope();
-        let first_segmentation = |text: &str| parser::segment(text).ok()?.into_iter().next();
+        let first_segmentation = |text: &str| {
+            if self.shuangpin.is_some() {
+                self.decode(text).and_then(|d| d.segmentation())
+            } else {
+                parser::segment(text).ok()?.into_iter().next()
+            }
+        };
         match english_tail {
             Some(tail) if head_wins => {
                 if let Some(mixed) = self.mixed_sentence(best, tail, typos) {
