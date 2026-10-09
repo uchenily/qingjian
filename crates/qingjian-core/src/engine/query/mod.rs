@@ -80,12 +80,19 @@ impl Engine {
         let head_wins = english_tail
             .as_ref()
             .is_some_and(|t| !t.competes || self.mixed_beats_plain(keys, t));
-        let decoded_head = english_tail
-            .as_ref()
-            .filter(|_| head_wins)
-            .and_then(|t| self.decode(&keys[..t.head_len]));
+        // 英文词把整段切成「前拼音 + 英文词 + 后拼音」。拼音候选与整句只按拼音段算：
+        // 句末英文词（`woxiangxuehaorust`）按前拼音段，句首英文词（`luayuyjhcxtma`）按后拼音段。
+        // 句中英文词（`wozddebugvege`）两段都有，这里先取前段，后段由整句拼接带上。
+        let pinyin_segment: &str = english_tail.as_ref().filter(|_| head_wins).map_or(keys, |t| {
+            if t.head_len == 0 {
+                &keys[t.word_end..]
+            } else {
+                &keys[..t.head_len]
+            }
+        });
+        let decoded_head = self.decode(pinyin_segment);
         let query_decoded = decoded_head.as_ref().or(decoded.as_ref());
-        let scope: &str = query_decoded.map_or(keys, |d| d.pinyin());
+        let scope: &str = query_decoded.map_or(pinyin_segment, |d| d.pinyin());
         // 末尾是英文词（`woxiangxuehaorust` / 小鹤 `woxlxt+rust`）：拼音候选与整句只按头段算，
         // 尾段整个跟在整句后面。全拼会比较两种读法，双拼的尾段按英文词表直接采用。
         let parsed = match (query_decoded, &english_tail) {
@@ -94,7 +101,7 @@ impl Engine {
                 .map(|s| (vec![s], d.tail()))
                 .ok_or(ParseError::NoSegmentation),
             (None, Some(tail)) if head_wins => {
-                parser::segment(&keys[..tail.head_len]).map(|s| (s, ""))
+                parser::segment(pinyin_segment).map(|s| (s, ""))
             }
             // 英文尾切法没赢（competes 且比分输给拼音整句）：按完整解码的全拼切分。
             (Some(d), Some(_)) => d

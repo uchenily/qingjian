@@ -76,49 +76,76 @@ impl Engine {
             }
         }
         let personal = self.learner.user_english();
-        let longest = scope.len() - MIN_ENGLISH_TAIL_HEAD_LETTERS;
-        (MIN_ENGLISH_TAIL_LETTERS..=longest).rev().find_map(|len| {
-            let head_len = scope.len() - len;
-            let tail = &scope[head_len..];
-            let tail_lower = tail.to_ascii_lowercase();
-            let words = lists
-                .iter()
-                .find(|words| words.get(&tail_lower).is_some())?;
-            let word = words.get(&tail_lower)?;
-            let acronym = word.bytes().any(|b| b.is_ascii_uppercase());
-            let known = personal.is_some_and(|words| words.get(&tail_lower).is_some());
-            if len == MIN_ENGLISH_TAIL_LETTERS && !acronym && !known {
-                return None;
-            }
-            if parser::is_fully_segmentable(&tail_lower) && len < MIN_PINYIN_LIKE_TAIL_LETTERS {
-                return None;
-            }
-            if shuangpin {
-                let decoded = self.decode(&scope[..head_len])?;
-                if !decoded.is_complete() || decoded.segmentation().is_none() {
-                    return None;
-                }
-            } else if !parser::is_fully_segmentable(&scope[..head_len]) {
-                return None;
-            }
-            Some(EnglishTail {
-                head_len,
-                word_end: scope.len(),
-                // 用户输入全小写时用词表原形（`id` → ID、`github` → GitHub）；
-                // 用户输入含大写时尊重用户输入（`Rust` → Rust）。
-                word: if tail.bytes().all(|b| b.is_ascii_lowercase()) {
-                    word.to_owned()
-                } else {
-                    tail.to_owned()
-                },
-                // 双拼前缀已经按音节边界解码，尾部是否也能解码不应阻止英文尾段。
-                competes: !shuangpin && full.is_some(),
-                log_prob: english_log_prob(words.frequency(&tail_lower)),
-            })
-        })
+        // 全拼：英文词可在句首 / 句中 / 句末，前后拼音段都要能完整切分（空段算合法）。
+        // 双拼走 split_shuangpin_english_tail，这里只处理全拼。
+        if !shuangpin {
+            return self.split_fullpinyin_english_tail(scope, &lists, personal, full.is_some());
+        }
+        None
     }
 
-    /// 在双拼原始键串中寻找一个英文词。英文词可以位于句中，前后都必须是完整双拼音节。
+    /// 全拼下在整段输入中寻找英文词。英文词可在句首 / 句中 / 句末，前后拼音段都要能完整切分（空段算合法）。
+    /// 取最长的英文词（`wodedatabase` 取 database 不取 base）；整段本身是英文词的已在调用方排除。
+    fn split_fullpinyin_english_tail(
+        &self,
+        scope: &str,
+        lists: &[&qingjian_dictionary::WordList],
+        personal: Option<&qingjian_dictionary::WordList>,
+        full_segmentable: bool,
+    ) -> Option<EnglishTail> {
+        let min_word = MIN_ENGLISH_TAIL_LETTERS;
+        let max_start = scope.len().saturating_sub(min_word);
+        let mut best: Option<EnglishTail> = None;
+        for start in 0..=max_start {
+            for end in ((start + min_word)..=scope.len()).rev() {
+                let typed = &scope[start..end];
+                let typed_lower = typed.to_ascii_lowercase();
+                let Some(words) = lists.iter().find(|words| words.get(&typed_lower).is_some())
+                else {
+                    continue;
+                };
+                let word = words.get(&typed_lower)?;
+                let acronym = word.bytes().any(|b| b.is_ascii_uppercase());
+                let known = personal.is_some_and(|known| known.get(&typed_lower).is_some());
+                let len = end - start;
+                if len == min_word && !acronym && !known {
+                    continue;
+                }
+                if parser::is_fully_segmentable(&typed_lower) && len < MIN_PINYIN_LIKE_TAIL_LETTERS {
+                    continue;
+                }
+                // 前后拼音段都要能完整切分（空段算合法）
+                if start > 0 && !parser::is_fully_segmentable(&scope[..start]) {
+                    continue;
+                }
+                if end < scope.len() && !parser::is_fully_segmentable(&scope[end..]) {
+                    continue;
+                }
+                let tail = EnglishTail {
+                    head_len: start,
+                    word_end: end,
+                    // 用户输入全小写时用词表原形（`id` → ID、`github` → GitHub）；
+                    // 用户输入含大写时尊重用户输入（`Rust` → Rust）。
+                    word: if typed.bytes().all(|b| b.is_ascii_lowercase()) {
+                        word.to_owned()
+                    } else {
+                        typed.to_owned()
+                    },
+                    // 英文词本身也能切成完整拼音时（`database` → da ta ba se），两种读法要比分。
+                    competes: full_segmentable,
+                    log_prob: english_log_prob(words.frequency(&typed_lower)),
+                };
+                // 取最长的英文词；同长取靠后的（句末优先，与原行为一致）
+                if best.as_ref().is_none_or(|b| end - start > b.word_end - b.head_len) {
+                    best = Some(tail);
+                }
+                break;
+            }
+        }
+        best
+    }
+
+    /// 在双拼原始键串中寻找一个英文词。英文词可以位于句首、句中或句末，前后都必须是完整双拼音节（句首 / 句末的英文词另一侧为空）。
     fn split_shuangpin_english_tail(
         &self,
         scope: &str,
@@ -128,18 +155,20 @@ impl Engine {
             return None;
         }
         let personal = self.learner.user_english();
-        let min_head = MIN_ENGLISH_TAIL_HEAD_LETTERS;
         let min_word = MIN_SHUANGPIN_ENGLISH_TAIL_LETTERS;
         let max_start = scope.len().saturating_sub(min_word);
-        for start in min_head..=max_start {
+        for start in 0..=max_start {
             if !scope.is_char_boundary(start) {
                 continue;
             }
-            let Some(prefix) = self.decode(&scope[..start]) else {
-                continue;
-            };
-            if !prefix.is_complete() || prefix.segmentation().is_none() {
-                continue;
+            // 英文词前的拼音头段：空（句首）或全部解成音节、没有解不动的尾巴。末尾单声母键（`z`=声母 z）算合法头段结尾。
+            if start > 0 {
+                let Some(prefix) = self.decode(&scope[..start]) else {
+                    continue;
+                };
+                if !prefix.tail().is_empty() || prefix.segmentation().is_none() {
+                    continue;
+                }
             }
             for end in ((start + min_word)..=scope.len()).rev() {
                 if !scope.is_char_boundary(end) {
@@ -164,7 +193,7 @@ impl Engine {
                 }
                 if end < scope.len() {
                     let suffix = self.decode(&scope[end..])?;
-                    if !suffix.is_complete() || suffix.segmentation().is_none() {
+                    if !suffix.tail().is_empty() || suffix.segmentation().is_none() {
                         continue;
                     }
                 }
@@ -188,10 +217,10 @@ impl Engine {
         None
     }
 
-    /// 整段也能读成拼音时两种读法比分：头段整句的得分加英文词的 log 概率、扣掉切到英文的代价，高过整段按拼音读的整句就按英文读。
-    /// 拼音读法末尾的单字母也读（`huoz` → 或者，不是 或 + 丢掉 z），两边覆盖同样多的字母才公平。
+    /// 整段也能读成拼音时两种读法比分：前拼音段 + 英文词 + 后拼音段的得分加英文词的 log 概率、扣掉切到英文的代价，
+    /// 高过整段按拼音读的整句就按英文读。拼音读法末尾的单字母也读（`huoz` → 或者，不是 或 + 丢掉 z），两边覆盖同样多的字母才公平。
     /// `wodedatabase`：我的 + database 赢过 我的大塔巴瑟；`womenqubeijing`：我们去北京 赢过 我们去 + Beijing；
-    /// `taida`：太大 赢过 他 + Ida；`huoz`：或者 赢过 和 + Oz。
+    /// `taida`：太大 赢过 他 + Ida；`huoz`：或者 赢过 和 + Oz。句首 / 句中英文词（`luayuyjhcxtma`、`wozdebugzhege`）同理。
     pub(super) fn mixed_beats_plain(&self, scope: &str, tail: &EnglishTail) -> bool {
         // 双拼下 scope 是原始键串，parser::segment 切不动；先 decode 成全拼再切。
         let decode = |text: &str| -> Option<String> {
@@ -206,16 +235,27 @@ impl Engine {
             let segmentations = parser::segment(&pinyin).ok()?;
             self.convert_sentence_static(&segmentations.first()?.patterns(), whole)
         };
-        let (Some(head), Some(plain)) = (
-            convert(&scope[..tail.head_len], false),
-            convert(scope, true),
-        ) else {
+        // 英文词把整段切成前拼音段 + 英文词 + 后拼音段。英文读法的得分 = 前段分 + 后段分 + 英文词 log 概率 − 切换代价。
+        // 空段（句首 / 句末）不计分。整段按拼音读的整句作为对手。
+        let head_score = if tail.head_len == 0 {
+            Some(0.0)
+        } else {
+            convert(&scope[..tail.head_len], false).map(|c| c.score)
+        };
+        let suffix = &scope[tail.word_end..];
+        let suffix_score = if suffix.is_empty() {
+            Some(0.0)
+        } else if self.shuangpin.is_some() {
+            convert(suffix, false).map(|c| c.score)
+        } else {
+            convert(suffix, false).map(|c| c.score)
+        };
+        let (Some(head), Some(suffix_s), Some(plain)) =
+            (head_score, suffix_score, convert(scope, true))
+        else {
             return false;
         };
-        if head.has_placeholder() {
-            return false;
-        }
-        head.score + tail.log_prob - ENGLISH_SWITCH_PENALTY > plain.score
+        head + suffix_s + tail.log_prob - ENGLISH_SWITCH_PENALTY > plain.score
     }
 
     /// 头段拼音转成的汉字加上英文尾段：候选的音节是头段的全拼音节加上敲的尾段字母（上屏按它们消耗拼音）。
@@ -228,15 +268,41 @@ impl Engine {
     ) -> Option<Candidate> {
         let keys = self.composition.scope();
         if self.shuangpin.is_none() {
-            let conversion = self.convert_sentence(&head.patterns(), typos)?;
-            if conversion.has_placeholder() {
-                return None;
+            // 前拼音段 + 英文词 + 后拼音段。句首英文词 head_len=0（前段空），句末 word_end=keys.len()（后段空）。
+            let head_text = if tail.head_len == 0 {
+                String::new()
+            } else {
+                let conversion = self.convert_sentence(&head.patterns(), typos)?;
+                if conversion.has_placeholder() {
+                    return None;
+                }
+                conversion.text
+            };
+            let suffix_keys = &keys[tail.word_end..];
+            let suffix_text = if suffix_keys.is_empty() {
+                String::new()
+            } else {
+                let suffix_seg = parser::segment(suffix_keys).ok()?.into_iter().next()?;
+                let conversion = self.convert_sentence(&suffix_seg.patterns(), typos)?;
+                if conversion.has_placeholder() {
+                    return None;
+                }
+                conversion.text
+            };
+            let typed = &keys[tail.head_len..tail.word_end];
+            let mut syllables = Vec::new();
+            if tail.head_len > 0 {
+                let head_conversion = self.convert_sentence(&head.patterns(), typos)?;
+                syllables.extend(head_conversion.syllables);
             }
-            let typed = &keys[tail.head_len..];
-            let mut syllables = conversion.syllables;
             syllables.push(typed.to_owned());
+            if !suffix_keys.is_empty() {
+                let suffix_seg = parser::segment(suffix_keys).ok()?.into_iter().next()?;
+                let suffix_conversion = self.convert_sentence(&suffix_seg.patterns(), typos)?;
+                syllables.extend(suffix_conversion.syllables);
+            }
             return Some(Candidate {
-                text: format!("{}{}", conversion.text, tail.word),
+                text: format!("{}{}{}", head_text, tail.word, suffix_text),
                 kind: CandidateKind::Sentence,
                 syllables,
                 reading: None,
@@ -248,7 +314,7 @@ impl Engine {
             let suffix = self.decode(&keys[tail.word_end..]);
             let mut combined = prefix.pinyin().to_owned();
             if let Some(suffix) = suffix {
-                if !suffix.is_complete() {
+                if !suffix.tail().is_empty() {
                     return None;
                 }
                 if !suffix.pinyin().is_empty() {
@@ -258,7 +324,12 @@ impl Engine {
                     combined.push_str(suffix.pinyin());
                 }
             }
-            let prefix_len = prefix.segmentation()?.syllables.len();
+            // 句首英文词（head_len=0）：prefix 为空，prefix_len=0，英文词插在最前
+            let prefix_len = if tail.head_len == 0 {
+                0
+            } else {
+                prefix.segmentation()?.syllables.len()
+            };
             (combined, prefix_len)
         } else {
             (keys[..tail.word_end].to_owned(), head.syllables.len())
