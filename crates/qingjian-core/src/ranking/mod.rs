@@ -21,13 +21,13 @@ use std::collections::HashSet;
 pub use scored::{PreselectKey, Scored, SortKey};
 
 /// 用户选择次数的加分系数：加分 = 系数 × ln(1 + min(次数, [`WEIGHT_CAP`]))。
-/// 这个加分只负责「同音词里偏向用户常选的那个」，所以既取对数又封顶（最多约 1.5 分，e^1.5 ≈ 4.5 倍），
+/// 这个加分只负责「同音词里偏向用户常选的那个」，所以既取对数又封顶（最多约 2.4 分，e^2.4 ≈ 11 倍），
 /// 让上下文（bigram）仍能压过它；不封顶时选过 173 次的 的 会带着 5 分加分把任何含 的 的拆分路径抬到整词之上
 /// （`haode` 出 号的 而不是 好的）。用户用得多的词另有个人 bigram 里的一元项撑腰，不靠这里。
-pub const WEIGHT_BONUS: f64 = 0.5;
+pub const WEIGHT_BONUS: f64 = 0.7;
 
 /// 加分里计入的选择次数上限。
-pub const WEIGHT_CAP: u32 = 20;
+pub const WEIGHT_CAP: u32 = 30;
 
 /// 模糊音命中扣的分（词频减半）。敲错变体的代价见 `correction::TypoKind`。
 pub const FUZZY_PENALTY: f64 = std::f64::consts::LN_2;
@@ -203,7 +203,7 @@ mod tests {
         assert_eq!(weight_bonus(0), 0.0);
         assert!(weight_bonus(1) < weight_bonus(10));
         assert_eq!(weight_bonus(WEIGHT_CAP), weight_bonus(WEIGHT_CAP * 50));
-        assert!(weight_bonus(u32::MAX) < 1.6);
+        assert!(weight_bonus(u32::MAX) < 2.5);
     }
 
     #[test]
