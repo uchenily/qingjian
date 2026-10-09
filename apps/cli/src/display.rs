@@ -58,8 +58,19 @@ pub fn show(engine: &mut Engine, input: &str, limit: usize) -> Option<Query> {
         .map(|c| display_width(&c.text))
         .max()
         .unwrap_or(0);
+    let mut sentence_marked = false;
     for (index, candidate) in query.candidates.items.iter().enumerate().take(limit) {
-        println!("  {:>2}. {}", index + 1, format_candidate(candidate, width));
+        let rescored = query.rescored
+            && candidate.kind == qingjian_core::CandidateKind::Sentence
+            && !sentence_marked;
+        if rescored {
+            sentence_marked = true;
+        }
+        println!(
+            "  {:>2}. {}",
+            index + 1,
+            format_candidate(candidate, width, rescored)
+        );
     }
     let hidden = query.candidates.items.len().saturating_sub(limit);
     if hidden > 0 {
@@ -135,7 +146,7 @@ pub fn show_typing(engine: &mut Engine, input: &str) {
 }
 
 /// 候选词左对齐，右侧是「词性 译文」，多条释义用 · 分隔。
-fn format_candidate(candidate: &Candidate, width: usize) -> String {
+fn format_candidate(candidate: &Candidate, width: usize, rescored: bool) -> String {
     let padding = " ".repeat(width.saturating_sub(display_width(&candidate.text)) + 2);
     let reading = candidate
         .reading
@@ -175,7 +186,8 @@ fn format_candidate(candidate: &Candidate, width: usize) -> String {
         qingjian_core::CandidateKind::Sentence => "[句] ",
         qingjian_core::CandidateKind::Emoji => "",
     };
-    format!("{}{padding}{marker}{reading}{annotation}", candidate.text)
+    let prefix = if rescored { "✦ " } else { "" };
+    format!("{prefix}{}{padding}{marker}{reading}{annotation}", candidate.text)
         .trim_end()
         .to_owned()
 }

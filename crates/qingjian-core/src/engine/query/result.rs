@@ -52,6 +52,9 @@ pub struct Query {
 
     /// 开启双拼或注音时的显示字串（如 "ㄅㄨˋ"）。如果有此值，preedit 就优先显示它，而不是拼音。
     pub typed_display: Option<String>,
+
+    /// 整句候选经过了神经重排：第一整句候选的顺序被神经模型调整过，壳可据此加标识。
+    pub rescored: bool,
 }
 
 impl Query {

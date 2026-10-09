@@ -37,6 +37,8 @@ struct QingjianCandidateView {
     uint8_t kind;
     /// 是否高亮（当前选中）。Rust 侧是 bool，C++ 用 uint8_t 对齐（1 字节）。
     uint8_t highlighted;
+    /// 经过神经重排排到第一的整句候选：渲染时加视觉标识。Rust 侧是 bool。
+    uint8_t rescored;
 };
 
 /// 一帧：要绘制的 preedit + 候选表 + 翻页状态。

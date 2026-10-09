@@ -67,6 +67,8 @@ pub struct Dispatch {
     last_flush: Instant,
     /// 当前应用标识。
     app: Option<String>,
+    /// 最近一次查询的整句候选经过了神经重排：给第一整句候选加标识。
+    rescored: bool,
 }
 
 impl Dispatch {
@@ -81,6 +83,7 @@ impl Dispatch {
             notice: None,
             last_flush: Instant::now(),
             app: None,
+            rescored: false,
         }
     }
 
@@ -159,6 +162,7 @@ impl Dispatch {
                 engine.annotate(&mut query.candidates);
                 cursor = query.marked_cursor();
                 let segments = query.marked_segments();
+                self.rescored = query.rescored;
                 self.session.reset(
                     &segments,
                     cursor,
@@ -167,6 +171,7 @@ impl Dispatch {
                 );
             }
             Err(_) => {
+                self.rescored = false;
                 let marked = engine.composition().text().to_owned();
                 self.session
                     .reset_plain(&marked, cursor, self.page_size);
@@ -177,14 +182,20 @@ impl Dispatch {
     /// 由会话状态构造一帧。
     fn build_frame(&self, _engine: &Engine) -> Frame {
         let preedit: Vec<(String, u8)> = self.session.preedit().to_vec();
-        let candidates: Vec<(String, Option<String>, u8, bool)> = self
+        let mut sentence_marked = false;
+        let candidates: Vec<(String, Option<String>, u8, bool, bool)> = self
             .session
             .page_candidates()
             .into_iter()
             .map(|(cand, highlighted)| {
                 let annotation = annotation_text(&cand);
                 let kind = kind_of(cand.kind);
-                (cand.text, annotation, kind, highlighted)
+                // 神经重排过的查询里，第一个整句候选加标识
+                let rescored = self.rescored && kind == 1 && !sentence_marked;
+                if rescored {
+                    sentence_marked = true;
+                }
+                (cand.text, annotation, kind, highlighted, rescored)
             })
             .collect();
         let builder = FrameBuilder {

@@ -28,6 +28,8 @@ pub struct CandidateView {
     pub kind: u8,
     /// 是否高亮（页内）。
     pub highlighted: bool,
+    /// 经过神经重排排到第一的整句候选：壳可据此加视觉标识。
+    pub rescored: bool,
 }
 
 /// 一次要绘制的全部内容。空帧（`preedit_count == 0 && candidate_count == 0`）表示收起候选窗。
@@ -131,7 +133,7 @@ impl Frame {
 pub struct FrameBuilder {
     pub preedit: Vec<(String, u8)>,
     pub cursor: usize,
-    pub candidates: Vec<(String, Option<String>, u8, bool)>,
+    pub candidates: Vec<(String, Option<String>, u8, bool, bool)>,
     pub highlight: usize,
     pub page: usize,
     pub page_count: usize,
@@ -153,7 +155,7 @@ impl FrameBuilder {
         let candidates: Vec<CandidateView> = self
             .candidates
             .iter()
-            .map(|(text, translation, kind, highlighted)| CandidateView {
+            .map(|(text, translation, kind, highlighted, rescored)| CandidateView {
                 text: cstring(text),
                 translation: translation
                     .as_deref()
@@ -161,6 +163,7 @@ impl FrameBuilder {
                     .unwrap_or(std::ptr::null_mut()),
                 kind: *kind,
                 highlighted: *highlighted,
+                rescored: *rescored,
             })
             .collect();
         let (preedit_ptr, preedit_count) = into_vec_parts(preedit);

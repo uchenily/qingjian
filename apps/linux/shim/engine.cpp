@@ -105,6 +105,10 @@ std::unique_ptr<fcitx::CandidateList> toCandidates(const QingjianFrame& frame) {
         const auto& view = frame.candidates[i];
         const char* str = view.text ? view.text : "";
         fcitx::Text comment;
+        // 神经重排排到第一的整句候选：右侧标注前加 ✦ 标识
+        if (view.rescored) {
+            comment.append("✦");
+        }
         if (view.translation && *view.translation) {
             comment.append(std::string(view.translation));
         }

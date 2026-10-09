@@ -56,6 +56,7 @@ impl Engine {
                 .collect(),
             rescored: self.last_rescored.get(),
         });
+        query.rescored = self.last_rescored.get();
         Ok(query)
     }
 
@@ -122,6 +123,7 @@ impl Engine {
                     decoded_keys: self.shuangpin.is_some() || self.zhuyin,
                     typed_display: decoded.as_ref().map(|d| d.marked()),
                     correction: None,
+                    rescored: false,
                     timings: Timings {
                         parse: start.elapsed(),
                         lookup: Duration::ZERO,
@@ -279,6 +281,7 @@ impl Engine {
             decoded_keys: self.shuangpin.is_some() || self.zhuyin,
             typed_display,
             correction,
+            rescored: false,
             timings: Timings {
                 parse,
                 lookup,
@@ -310,6 +313,7 @@ impl Engine {
             decoded_keys: self.shuangpin.is_some() || self.zhuyin,
             typed_display: None,
             correction: None,
+            rescored: false,
             timings: Timings {
                 parse: Duration::ZERO,
                 lookup: Duration::ZERO,
@@ -337,6 +341,7 @@ impl Engine {
             decoded_keys: self.shuangpin.is_some() || self.zhuyin,
             typed_display: None,
             correction: None,
+            rescored: false,
             timings: Timings {
                 parse: Duration::ZERO,
                 lookup: Duration::ZERO,
@@ -375,6 +380,7 @@ impl Engine {
             decoded_keys: self.shuangpin.is_some() || self.zhuyin,
             typed_display: None,
             correction: None,
+            rescored: false,
             timings: Timings {
                 parse: Duration::ZERO,
                 lookup: Duration::ZERO,
