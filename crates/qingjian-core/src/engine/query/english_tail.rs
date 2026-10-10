@@ -21,6 +21,12 @@ pub(crate) struct EnglishTail {
     pub log_prob: f64,
 }
 
+/// 多张英文词表里取词频最高的（随包表的 wordfreq 远高于个人表的选择次数），
+/// 给 `english_log_prob` 估英文词的 log 概率用。
+fn best_frequency(lists: &[&qingjian_dictionary::WordList], code: &str) -> Option<u32> {
+    lists.iter().filter_map(|words| words.frequency(code)).max()
+}
+
 /// wordfreq 的 Zipf 频率（词表里 ×1000 存）换成 log 概率：Zipf z 是每十亿词里 10^z 次，即 log P = (z − 9)·ln 10。
 /// 没有词频的（个人表里的词、`kubectl` 这类技术词）按 Zipf 3（百万分之一）算。
 pub(crate) fn english_log_prob(frequency: Option<u32>) -> f64 {
@@ -131,7 +137,7 @@ impl Engine {
                     },
                     // 英文词本身也能切成完整拼音时（`database` → da ta ba se），两种读法要比分。
                     competes: full.is_some(),
-                    log_prob: english_log_prob(words.frequency(&typed_lower)),
+                    log_prob: english_log_prob(best_frequency(&lists, &typed_lower)),
                 };
                 if best.as_ref().is_none_or(|b| end - start > b.word_end - b.head_len) {
                     best = Some(tail);
@@ -208,7 +214,7 @@ impl Engine {
                     // 尾段也能解码成完整双拼时（`meds` → me+ds → 么东，与英文 meds 竞争），
                     // 要和拼音整句比分，不能直接采用英文读法。
                     competes: self.decode(typed).is_some_and(|d| d.is_complete()),
-                    log_prob: english_log_prob(words.frequency(&typed_lower)),
+                    log_prob: english_log_prob(best_frequency(lists, &typed_lower)),
                 });
             }
         }
@@ -252,7 +258,14 @@ impl Engine {
         } else {
             0.0
         };
-        head.score + suffix_score + tail.log_prob - ENGLISH_SWITCH_PENALTY > plain.score
+        // 用户选过这个英文词（`nice` 选多次）时加分，与拼音整句里的用户加分对等：
+        // 不加的话 `mixed_beats_plain` 只看静态分数，用户选再多次英文切法也赢不了拼音。
+        let english_weight = self.learner.weight(&tail.word);
+        let english_bonus = ranking::weight_bonus(english_weight);
+        // 用户选过这个英文词时不扣切换代价：冷启动时 penalty 拦住误切（`womenqubeijing` 不出 我们去Beijing），
+        // 但用户教过 `nice` 就该让它赢，penalty 3 nat 会压过 weight_bonus（封顶 ~2.4）。
+        let penalty = if english_weight > 0 { 0.0 } else { ENGLISH_SWITCH_PENALTY };
+        head.score + suffix_score + tail.log_prob + english_bonus - penalty > plain.score
     }
 
     /// 拼音段转成的汉字加上英文词（及后拼音段）：`woxiangxuehaorust` → 我想学好 + rust、

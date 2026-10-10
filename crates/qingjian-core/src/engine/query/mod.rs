@@ -79,9 +79,14 @@ impl Engine {
         let english_tail = self.split_english_tail(keys);
         // 英文切法与拼音整句都作为候选出现，`head_wins` 决定英文切法排第一还是排后面：
         // 英文词不像拼音（`rust`）直接排第一；也像拼音（`database`）时按通顺程度比分。
-        let head_wins = english_tail
-            .as_ref()
-            .is_some_and(|t| !t.competes || self.mixed_beats_plain(keys, t));
+        // 用户选过这个英文词且次数够多时直接排第一——用户教过的比语言模型可靠
+        // （`fwihnice` 选过 nice 53 次，但 `mixed_beats_plain` 的 wordfreq Zipf 与 bigram 量纲不一致，
+        // `nice` 的 log 概率被估低，拼音 `你侧` 反而赢）。
+        let head_wins = english_tail.as_ref().is_some_and(|t| {
+            !t.competes
+                || self.mixed_beats_plain(keys, t)
+                || self.learner.weight(&t.word) >= ENGLISH_TAIL_USER_WIN
+        });
         // `head_wins` 时拼音候选与显示按拼音段算（词级候选是拼音段的词，`marked_text` 是拼音段 + 英文词）；
         // 句末英文词按前段，句首英文词（`head_len=0`）按后段。否则按完整输入切。
         let decoded_head = english_tail.as_ref().filter(|_| head_wins).and_then(|t| {

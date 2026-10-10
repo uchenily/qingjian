@@ -612,3 +612,21 @@ fn mid_english_word_that_loses_to_plain_does_not_appear() {
         .iter()
         .any(|c| c.text.contains("bf")));
 }
+
+/// 用户选过英文词多次后，中英混输里英文切法排第一：`fwihnice` → 非常nice。
+/// `nice` 双拼 = `ni'ce`（你侧），`competes=true`，冷启动时 `mixed_beats_plain` 可能判拼音赢；
+/// 但用户选过 `nice` 多次（`weight >= ENGLISH_TAIL_USER_WIN`）后直接排第一，不再跟拼音比分。
+#[test]
+fn mid_english_word_user_chose_often_ranks_first() {
+    let dictionary =
+        Dictionary::parse("非	fei	9000\n常	chang	9000\n你	ni	9000\n侧	ce	9000\n").unwrap();
+    let mut counts = HashMap::new();
+    counts.insert("nice".to_owned(), 10);
+    let mut engine = Engine::new(dictionary)
+        .with_english(WordList::parse("nice	nice	5370\n").unwrap())
+        .with_learner(Box::new(CountingLearner(counts)));
+    engine.set_shuangpin(Some(Scheme::Xiaohe));
+    engine.set_input("fwihnice");
+    let query = engine.query().unwrap();
+    assert_eq!(query.candidates.items[0].text, "非常nice");
+}

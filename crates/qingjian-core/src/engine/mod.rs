@@ -235,6 +235,10 @@ const ENGLISH_SWITCH_PENALTY: f64 = 3.0;
 /// 英文词频的下限（Zipf）：没有词频的词按百万分之一算。
 const ENGLISH_ZIPF_FLOOR: f64 = 3.0;
 
+/// 用户选过这个英文词这么多次后，中英混输里英文切法直接排第一，不再跟拼音整句比分：
+/// `mixed_beats_plain` 的 wordfreq Zipf 与 bigram 量纲不一致，常用英文词的 log 概率会被估低。
+const ENGLISH_TAIL_USER_WIN: u32 = 5;
+
 /// emoji 只配给前几个候选，每个词最多几个、一次最多几个。
 const EMOJI_SCAN: usize = 5;
 const EMOJI_PER_WORD: usize = 2;
