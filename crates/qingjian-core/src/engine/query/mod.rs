@@ -73,30 +73,41 @@ impl Engine {
         if is_raw(keys, self.modes(), self.shuangpin, self.zhuyin) {
             return Ok(self.query_raw(keys, rest, start));
         }
-        // 双拼先解成全拼（音节间已用 `'` 连好，切分没有歧义）；英文尾段要先按原始键串切，
+        // 双拼先解成全拼（音节间已用 `'` 连好，切分没有歧义）；英文词要先按原始键串切，
         // 因为 rust / python 也可能恰好被双拼解码成若干音节。
         let decoded = self.decode(keys);
         let english_tail = self.split_english_tail(keys);
+        // 英文切法与拼音整句都作为候选出现，`head_wins` 决定英文切法排第一还是排后面：
+        // 英文词不像拼音（`rust`）直接排第一；也像拼音（`database`）时按通顺程度比分。
         let head_wins = english_tail
             .as_ref()
             .is_some_and(|t| !t.competes || self.mixed_beats_plain(keys, t));
-        let decoded_head = english_tail
-            .as_ref()
-            .filter(|_| head_wins)
-            .and_then(|t| self.decode(&keys[..t.head_len]));
+        // `head_wins` 时拼音候选与显示按拼音段算（词级候选是拼音段的词，`marked_text` 是拼音段 + 英文词）；
+        // 句末英文词按前段，句首英文词（`head_len=0`）按后段。否则按完整输入切。
+        let decoded_head = english_tail.as_ref().filter(|_| head_wins).and_then(|t| {
+            if t.head_len == 0 {
+                self.decode(&keys[t.word_end..])
+            } else {
+                self.decode(&keys[..t.head_len])
+            }
+        });
         let query_decoded = decoded_head.as_ref().or(decoded.as_ref());
         let scope: &str = query_decoded.map_or(keys, |d| d.pinyin());
-        // 末尾是英文词（`woxiangxuehaorust` / 小鹤 `woxlxt+rust`）：拼音候选与整句只按头段算，
-        // 尾段整个跟在整句后面。全拼会比较两种读法，双拼的尾段按英文词表直接采用。
         let parsed = match (query_decoded, &english_tail) {
             (Some(d), tail) if head_wins || tail.is_none() => d
                 .segmentation()
                 .map(|s| (vec![s], d.tail()))
                 .ok_or(ParseError::NoSegmentation),
             (None, Some(tail)) if head_wins => {
-                parser::segment(&keys[..tail.head_len]).map(|s| (s, ""))
+                // 全拼下 `decode` 返回 None。句首英文词（`head_len=0`）按后段切，否则按前段切。
+                let pinyin_segment = if tail.head_len == 0 {
+                    &keys[tail.word_end..]
+                } else {
+                    &keys[..tail.head_len]
+                };
+                parser::segment(pinyin_segment).map(|s| (s, ""))
             }
-            // 英文尾切法没赢（competes 且比分输给拼音整句）：按完整解码的全拼切分。
+            // 英文切法没赢（拼音更通顺）：按完整解码的全拼切分。
             (Some(d), Some(_)) => d
                 .segmentation()
                 .map(|s| (vec![s], d.tail()))
@@ -254,7 +265,7 @@ impl Engine {
         self.insert_emoji(&mut items);
         let rank = start.elapsed();
 
-        // 按头段算时英文尾段不参与拼音候选，显示上跟在切分后面：`wo'xiang'xue'hao'rust`
+        // `head_wins` 时显示按头段算：`marked_text` 是头段拼音 + 英文词（`wo'xiang'xue'hao'rust`）。
         let tail = english_tail
             .as_ref()
             .filter(|_| head_wins)
@@ -395,32 +406,44 @@ impl Engine {
             return;
         };
         let keys = self.composition.scope();
-        let first_segmentation = |text: &str| {
+        // `head_wins` 时 `segmentations` 是头段切分，拼音整句要按完整输入重新切分生成
+        // （`woxiangxuehaorust` 的拼音整句是 我想学好如石头，不是头段的 我想学好）。
+        let full_segmentation = |text: &str| {
             if self.shuangpin.is_some() {
                 self.decode(text).and_then(|d| d.segmentation())
             } else {
                 parser::segment(text).ok()?.into_iter().next()
             }
         };
-        match english_tail {
-            Some(tail) if head_wins => {
-                if let Some(mixed) = self.mixed_sentence(best, tail, typos) {
-                    items.insert(0, mixed);
-                }
-                if tail.competes
-                    && let Some(full) = first_segmentation(keys)
-                    && let Some(plain) = self.plain_sentence(items, &full, typos)
-                {
-                    let position = items.len().min(1);
-                    items.insert(position, plain);
-                }
+        let plain = if head_wins && english_tail.is_some() {
+            // 英文切法排第一时，拼音整句按完整输入切分排第二。
+            full_segmentation(keys)
+                .and_then(|full| self.plain_sentence(items, &full, typos))
+        } else {
+            self.plain_sentence(items, best, typos)
+        };
+        // 英文切法（头拼音 + 英文词 [+ 后拼音]）作为额外候选：`woxiangxuehaorust` → 我想学好rust。
+        // 只在英文读法更通顺（`head_wins`）时生成；拼音碾压时不出（`womenqubeijing` 不出 我们去Beijing）。
+        let mixed = if head_wins {
+            english_tail.and_then(|tail| self.mixed_sentence(tail, typos))
+        } else {
+            None
+        };
+        match (mixed, plain) {
+            (Some(mixed), Some(plain)) => {
+                // 英文切法更通顺：排第一，拼音整句排第二。
+                items.insert(0, mixed);
+                let position = items.len().min(1);
+                items.insert(position, plain);
             }
-            _ => {
-                if let Some(plain) = self.plain_sentence(items, best, typos) {
-                    let position = leading_english(items);
-                    items.insert(position, plain);
-                }
+            (Some(mixed), None) => {
+                items.insert(0, mixed);
             }
+            (None, Some(plain)) => {
+                let position = leading_english(items);
+                items.insert(position, plain);
+            }
+            (None, None) => {}
         }
     }
 

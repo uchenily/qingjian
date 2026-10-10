@@ -527,3 +527,66 @@ fn english_word_that_is_also_valid_pinyin_rises_with_user_choices() {
     engine.set_input("nice");
     assert_eq!(first(&engine), "nice");
 }
+
+/// 句首英文词（`luayuyjhcxtma` → lua语言好学吗）：英文词在整段开头，后面接完整双拼。
+/// 双拼下每个汉字固定两键，`lua` 不会读成 `lu'a`，只能是英文词。
+#[test]
+fn shuangpin_english_word_at_the_start_joins_the_sentence() {
+    let dictionary = Dictionary::parse(
+        "语	yu	9000\n言	yan	9000\n好	hao	9000\n学	xue	9000\n吗	ma	9000\n",
+    )
+    .unwrap();
+    let mut engine = Engine::new(dictionary).with_english(WordList::parse("lua\n").unwrap());
+    engine.set_shuangpin(Some(Scheme::Xiaohe));
+    engine.set_input("luayuyjhcxtma");
+    let query = engine.query().unwrap();
+    assert_eq!(query.candidates.items[0].text, "lua语言好学吗");
+    assert_eq!(query.candidates.items[0].kind, CandidateKind::Sentence);
+    assert_eq!(engine.commit(&query.candidates.items[0]), "lua语言好学吗");
+    assert!(engine.composition().is_empty());
+}
+
+/// 句中英文词（`wozddebugvege` → 我在debug这个）：英文词夹在两段双拼之间，前后都要能完整切分。
+#[test]
+fn shuangpin_english_word_in_the_middle_joins_the_sentence() {
+    let dictionary = Dictionary::parse(
+        "我	wo	9000\n在	zai	9000\n这	zhe	9000\n个	ge	9000\n",
+    )
+    .unwrap();
+    let mut engine = Engine::new(dictionary).with_english(WordList::parse("debug\n").unwrap());
+    engine.set_shuangpin(Some(Scheme::Xiaohe));
+    engine.set_input("wozddebugvege");
+    let query = engine.query().unwrap();
+    assert_eq!(query.candidates.items[0].text, "我在debug这个");
+    assert_eq!(query.candidates.items[0].kind, CandidateKind::Sentence);
+    assert_eq!(engine.commit(&query.candidates.items[0]), "我在debug这个");
+    assert!(engine.composition().is_empty());
+}
+
+/// 全拼句首英文词（`githubshishenme` → github是什么）：英文词在整段开头，后面接完整拼音。
+#[test]
+fn fullpinyin_english_word_at_the_start_joins_the_sentence() {
+    let dictionary =
+        Dictionary::parse("是	shi	9000\n什	shen	9000\n么	me	9000\n").unwrap();
+    let mut engine = Engine::new(dictionary).with_english(WordList::parse("github\n").unwrap());
+    engine.set_input("githubshishenme");
+    let query = engine.query().unwrap();
+    assert_eq!(query.candidates.items[0].text, "github是什么");
+    assert_eq!(query.candidates.items[0].kind, CandidateKind::Sentence);
+    assert_eq!(engine.commit(&query.candidates.items[0]), "github是什么");
+    assert!(engine.composition().is_empty());
+}
+
+/// 英文切法排第一时，拼音整句也出（排第二）：`woxlxtrust` → 我想学rust 第一、我想学如 第二。
+/// 之前 `competes=false`（英文词不像拼音）时拼音整句不出，现在两种切法都给。
+#[test]
+fn english_tail_wins_but_plain_sentence_still_appears() {
+    let dictionary =
+        Dictionary::parse("我	wo	9000\n想	xiang	9000\n学	xue	9000\n如	ru	9000\n").unwrap();
+    let mut engine = Engine::new(dictionary).with_english(WordList::parse("rust\n").unwrap());
+    engine.set_shuangpin(Some(Scheme::Xiaohe));
+    engine.set_input("woxlxtrust");
+    let query = engine.query().unwrap();
+    assert_eq!(query.candidates.items[0].text, "我想学rust");
+    assert_eq!(query.candidates.items[1].text, "我想学如");
+}

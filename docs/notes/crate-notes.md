@@ -14,11 +14,11 @@ TSV 解析、查询与生成工具把 `lue` / `nue` 统一成 `lve` / `nve`。
 
 模块：`composition` / `parser`（切分：按 `'` 分段，各段独立 DP 切分后做笛卡尔积，**每段笛卡尔积后立即 `prune` 到 `MAX_SEGMENTATIONS=8`**，否则双拼长串解码成几十段相乘会指数爆炸）/ `correction`（拼写纠错：整段一处编辑的候选纠正 + `typo` 音节级敲错变体表，后者进整句词图当带代价的边）/
 `candidate` / `ranking` / `shortcut` / `sentence` / `fuzzy` / `shuangpin`（双拼：四套方案键位表、键 → 全拼解码与消耗换算）/ `zhuyin`（大千注音：键 → 注音符号 → 拼音，`[general] zhuyin` 开关，声调只判音节完整不进查询）/ `emoji` /
-`english`（英文模式候选）/ `engine`（`query::EnglishTail`：句末英文词并入整句，`woxiangxuehaorust` → 我想学好rust，尾段也像拼音时按分数与拼音读法比）。
+`english`（英文模式候选）/ `engine`（`query::EnglishTail`：中英混输的英文词并入整句，可在句首 / 句中 / 句末，`woxiangxuehaorust` → 我想学好rust、`luayuyjhcxtma` → lua语言好学吗，英文词也像拼音时按分数与拼音读法比）。
 `Engine` 是对外唯一门面，`Translator` / `Learner` trait 在 `engine` 模块；词库是「主词库 + 附加词库（`set_extra_dictionaries`）+ 用户词」的列表。
 - 中英混输的英文词位置（`extras::insert_english`）：拼音不像话的输入（`hello`、`key`）英文排第一，能切动的（`nice` → ni ce）英文排第二、整句排第一；
   用户在这段输入下选英文词的次数反超中文首选后英文排第一（`english_first = chosen <= english_weight && (unlikely_pinyin || english_weight > 0)`），不依赖拼音像不像话；
-  句末英文词并入整句（`EnglishTail`）不受它影响。
+  中英混输的英文词并入整句（`EnglishTail`）不受它影响。
 
 ## crates/qingjian-translate
 
