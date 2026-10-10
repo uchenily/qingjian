@@ -590,3 +590,25 @@ fn english_tail_wins_but_plain_sentence_still_appears() {
     assert_eq!(query.candidates.items[0].text, "我想学rust");
     assert_eq!(query.candidates.items[1].text, "我想学如");
 }
+
+/// 句中英文词也像拼音（`competes=true`）且拼音整句更通顺时，英文切法不出：
+/// `zvjibfdeyrzejquibungiidc`（最基本的原则就是不能吃到）里 `bf`=本 也是英文词（男朋友），
+/// 但「最基本的原则就是不能吃到」比「最基bf的原则就是不能吃到」通顺，英文切法不出。
+/// 关键是 `mixed_beats_plain` 要把后拼音段的分数算进去，否则头段「最基」单独分高会误判英文赢。
+#[test]
+fn mid_english_word_that_loses_to_plain_does_not_appear() {
+    let dictionary = Dictionary::parse(
+        "最	zui	9000\n基	ji	9000\n本	ben	9000\n的	de	9000\n原	yuan	9000\n则	ze	9000\n就	jiu	9000\n是	shi	9000\n不	bu	9000\n能	neng	9000\n吃	chi	9000\n到	dao	9000\n",
+    )
+    .unwrap();
+    let mut engine = Engine::new(dictionary).with_english(WordList::parse("bf\n").unwrap());
+    engine.set_shuangpin(Some(Scheme::Xiaohe));
+    engine.set_input("zvjibfdeyrzejquibungiidc");
+    let query = engine.query().unwrap();
+    assert_eq!(query.candidates.items[0].text, "最基本的原则就是不能吃到");
+    assert!(!query
+        .candidates
+        .items
+        .iter()
+        .any(|c| c.text.contains("bf")));
+}

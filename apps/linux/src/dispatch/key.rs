@@ -39,7 +39,7 @@ pub struct KeyInput {
     /// xkb keysym。
     pub sym: u32,
     /// keycode（物理键，暂未用）。
-    pub code: u32,
+    // pub code: u32,
     /// 修饰键位掩码（见 `MOD_*`）。
     pub modifiers: u32,
     /// 该键产生的字符（已按修饰键处理过）；功能键为 `None`。

@@ -242,7 +242,17 @@ impl Engine {
         if head.has_placeholder() {
             return false;
         }
-        head.score + tail.log_prob - ENGLISH_SWITCH_PENALTY > plain.score
+        // 句中英文词有后拼音段，后段分数也要算进去（`zvjibfdeyrzejquibungiidc` 的后段
+        // 是「的原则就是不能吃到」，不算的话头段「最基」单独分高会误判英文赢）。
+        let suffix_score = if tail.word_end < scope.len() {
+            match convert(&scope[tail.word_end..], false) {
+                Some(suffix) if !suffix.has_placeholder() => suffix.score,
+                _ => return false,
+            }
+        } else {
+            0.0
+        };
+        head.score + suffix_score + tail.log_prob - ENGLISH_SWITCH_PENALTY > plain.score
     }
 
     /// 拼音段转成的汉字加上英文词（及后拼音段）：`woxiangxuehaorust` → 我想学好 + rust、
