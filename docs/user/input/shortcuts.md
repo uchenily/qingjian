@@ -25,10 +25,11 @@ description: 日期时间、算式与中文数字、中英混输、英文补全�
   多选几次英文词后它就排第一：`nice` 选过几次后下次再打 `nice` 直接排第一，不用再翻到第三个。
   没有中文候选时（`github`）英文仍排第一。
 - 拼音不成立且不少于 3 个字母时补全前缀：`compa` → company / companies / compared。
-- 一句拼音里夹着英文词时，整句直接包含该词：`woxiangxuehaorust` → 我想学好rust，`luayuyjhcxtma` → lua语言好学吗，`wozddebugvege` → 我在debug这个。
-  英文词可在句首 / 句中 / 句末，前后都要是能切开的拼音。拼音行显示 `wo'xiang'xue'hao'rust`，`Space` 上屏整句。该英文词需在词表中（用户自己输入过的也算，见 [英文模式](english-mode.md)）。
+- 一句拼音末尾接一个英文词时，整句直接包含该词：`woxiangxuehaorust` → 我想学好rust，`wodeid` → 我的ID，`woyongvim` → 我用vim。
+  拼音行显示 `wo'xiang'xue'hao'rust`，`Space` 上屏整句。该英文词需在词表中（用户自己输入过的也算，见 [英文模式](english-mode.md)）。
   `database` 这类同时可读作拼音的输入，按两种读法的通顺程度排序：我的database 排第一、我的大塔巴瑟 排第二；
   `womenqubeijing` 只给出 我们去北京。`fan`、`to` 这类短词按拼音处理；可纠正为通顺拼音的输入错误（`shiide` → 是的）不视为英文。
+  英文词只识别句末，`wozaidebugzhege` 这类位于句中的暂不支持。
 - 输入拼音时输入半角标点（`-` `,` `.` `?` 等，翻页键除外）即进入**英文直输**：`no-way` `hello,` 整段原样显示，之后的字符原样追加，
   `Space` / `Enter` 原样上屏（空格字符也一并输出），因此中文模式下可直接输入 `hello, world?`。
 
