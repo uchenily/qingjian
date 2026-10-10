@@ -630,3 +630,17 @@ fn mid_english_word_user_chose_often_ranks_first() {
     let query = engine.query().unwrap();
     assert_eq!(query.candidates.items[0].text, "非常nice");
 }
+
+/// 双拼下取最长的英文词：`wodedatabase` 取 database（8 字母）不取 DE（2 字母缩写）。
+/// 双拼分支原来 `return` 第一个找到的，`start=2` 先命中 `de`=`DE` 就返回，`database` 没机会。
+#[test]
+fn shuangpin_picks_longest_english_word_over_short_acronym() {
+    let dictionary = Dictionary::parse("我	wo	9000\n的	de	9000\n达	da	100\n塔	ta	100\n巴	ba	100\n瑟	se	100\n").unwrap();
+    let mut engine = Engine::new(dictionary)
+        .with_english(WordList::parse("DE	de	5230\ndatabase	database	4310\n").unwrap())
+        .with_learner(Box::new(CountingLearner(HashMap::new())));
+    engine.set_shuangpin(Some(Scheme::Xiaohe));
+    engine.set_input("wodedatabase");
+    let query = engine.query().unwrap();
+    assert_eq!(query.candidates.items[0].text, "我的database");
+}

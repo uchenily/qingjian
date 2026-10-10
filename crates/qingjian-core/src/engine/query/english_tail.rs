@@ -160,6 +160,7 @@ impl Engine {
         let personal = self.learner.user_english();
         let min_word = MIN_SHUANGPIN_ENGLISH_TAIL_LETTERS;
         let max_start = scope.len().saturating_sub(min_word);
+        let mut best: Option<EnglishTail> = None;
         for start in 0..=max_start {
             if !scope.is_char_boundary(start) {
                 continue;
@@ -184,7 +185,9 @@ impl Engine {
                 else {
                     continue;
                 };
-                let word = words.get(&typed_lower)?;
+                let Some(word) = words.get(&typed_lower) else {
+                    continue;
+                };
                 let acronym = word.bytes().any(|b| b.is_ascii_uppercase());
                 let known = personal.is_some_and(|known| known.get(&typed_lower).is_some());
                 if end - start < min_word && !acronym && !known {
@@ -196,12 +199,14 @@ impl Engine {
                     continue;
                 }
                 if end < scope.len() {
-                    let suffix = self.decode(&scope[end..])?;
+                    let Some(suffix) = self.decode(&scope[end..]) else {
+                        continue;
+                    };
                     if !suffix.is_complete() || suffix.segmentation().is_none() {
                         continue;
                     }
                 }
-                return Some(EnglishTail {
+                let tail = EnglishTail {
                     head_len: start,
                     word_end: end,
                     // 用户输入全小写时用词表原形（`id` → ID、`github` → GitHub）；
@@ -215,10 +220,15 @@ impl Engine {
                     // 要和拼音整句比分，不能直接采用英文读法。
                     competes: self.decode(typed).is_some_and(|d| d.is_complete()),
                     log_prob: english_log_prob(best_frequency(lists, &typed_lower)),
-                });
+                };
+                // 取最长的英文词（`wodedatabase` 取 database 不取 DE）；同长取靠后的（句末优先）。
+                if best.as_ref().is_none_or(|b| end - start > b.word_end - b.head_len) {
+                    best = Some(tail);
+                }
+                break;
             }
         }
-        None
+        best
     }
 
     /// 整段也能读成拼音时两种读法比分：头段整句的得分加英文词的 log 概率、扣掉切到英文的代价，高过整段按拼音读的整句就按英文读。
