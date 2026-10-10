@@ -98,7 +98,7 @@ pub unsafe extern "C" fn qingjian_set_context(text: *const c_char, cursor_chars:
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qingjian_key_event(
     sym: u32,
-    code: u32,
+    _code: u32,
     modifiers: u32,
     character: u32,
     is_release: bool,
@@ -110,7 +110,7 @@ pub unsafe extern "C" fn qingjian_key_event(
     let app = unsafe { app_nullable(app) };
     let input = KeyInput {
         sym,
-        code,
+        // code,
         modifiers,
         character: char::from_u32(character),
         is_release,
