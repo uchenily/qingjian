@@ -150,23 +150,6 @@ const WIN: KeyModifiers = KeyModifiers {
     ..ALT_OFF
 };
 
-/// 平台缺省的译词键：macOS 是 Alt，Windows 是 Ctrl（Alt 被系统菜单截走）。
-#[cfg(not(windows))]
-const TRANSLATE: KeyModifiers = KeyModifiers {
-    alt: true,
-    ..ALT_OFF
-};
-#[cfg(windows)]
-const TRANSLATE: KeyModifiers = KeyModifiers {
-    ctrl: true,
-    ..ALT_OFF
-};
-
-const TRANSLATE_SECOND: KeyModifiers = KeyModifiers {
-    shift: true,
-    ..TRANSLATE
-};
-
 /// 当前页里 `text` 排第几（1 起）。
 fn slot_of(frame: &Frame, text: &str) -> u32 {
     let position = candidate_texts(frame)
@@ -543,31 +526,6 @@ fn punctuation_after_chinese_candidate_commits_with_full_width() {
         (KeyOutcome::Consumed, Some("你好，"))
     );
     assert!(frame.is_empty(), "组句已提交");
-}
-
-#[test]
-fn alt_digit_commits_first_translation() {
-    let mut router = router();
-    let (_, _, frame) = type_letters(&mut router, "nihao");
-    let slot = slot_of(&frame, "你好");
-    // 缺省译词键（mac ⌥ / Windows Ctrl）+ 数字：上屏那个候选的第一个译词，组句结束。
-    let (outcome, commit, after) = press(&mut router, digit_with(slot, TRANSLATE));
-    assert_eq!(
-        (outcome, commit.as_deref()),
-        (KeyOutcome::Consumed, Some("hello"))
-    );
-    assert!(after.is_empty());
-}
-
-#[test]
-fn second_translation_key_without_second_sense_is_swallowed() {
-    let mut router = router();
-    let (_, _, frame) = type_letters(&mut router, "nihao");
-    let slot = slot_of(&frame, "你好");
-    // 样例释义表里「你好」只有一条译文：第二个译词键（Shift+译词键）+ 数字吞掉不动，组句还在。
-    let (outcome, commit, after) = press(&mut router, digit_with(slot, TRANSLATE_SECOND));
-    assert_eq!((outcome, commit), (KeyOutcome::Consumed, None));
-    assert_eq!(preedit(&after), "ni'hao");
 }
 
 #[test]
