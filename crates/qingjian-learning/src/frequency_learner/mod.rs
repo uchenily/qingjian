@@ -8,7 +8,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use qingjian_core::sentence::{Context, UserNgram};
-use qingjian_core::storage::{read_text_lossy, write_atomic};
+use qingjian_core::storage::{read_text_lossy, write_atomic_nosync};
 use qingjian_core::{Candidate, Forgotten, Learner};
 use qingjian_dictionary::{Dictionary, WordList};
 
@@ -170,7 +170,7 @@ impl FrequencyLearner {
     pub fn save_to(&mut self, path: impl AsRef<Path>) -> Result<(), LearningError> {
         let mut rows: Vec<(&String, &u32)> = self.counts.iter().collect();
         rows.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
-        write_atomic(path.as_ref(), |file| {
+        write_atomic_nosync(path.as_ref(), |file| {
             writeln!(file, "# 青简用户词频：词\\t选择次数")?;
             for (text, count) in rows {
                 writeln!(file, "{text}\t{count}")?;

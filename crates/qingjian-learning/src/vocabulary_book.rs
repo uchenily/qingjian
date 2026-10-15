@@ -3,7 +3,7 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use jiff::civil::Date;
-use qingjian_core::storage::{read_text_lossy, write_atomic_str};
+use qingjian_core::storage::{read_text_lossy, write_atomic_str_nosync};
 use qingjian_core::{FRESH_UNTIL, Language, LevelCount, VocabularySummary, VocabularyTracker};
 use qingjian_translate::LevelTable;
 
@@ -180,7 +180,7 @@ impl VocabularyBook {
                 entry.seen, entry.committed, entry.used, entry.first, entry.last
             );
         }
-        write_atomic_str(path, &text)?;
+        write_atomic_str_nosync(path, &text)?;
         Ok(())
     }
 }

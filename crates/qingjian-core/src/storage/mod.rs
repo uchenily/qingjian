@@ -22,7 +22,7 @@ pub fn write_atomic(
     path: &Path,
     write: impl FnOnce(&mut BufWriter<File>) -> io::Result<()>,
 ) -> io::Result<()> {
-    write_atomic_with(path, false, write)
+    write_atomic_with(path, false, true, write)
 }
 
 /// 同 [`write_atomic`]，但文件只有本用户可读写（0600）：放密钥的 `.env` 用。
@@ -30,12 +30,26 @@ pub fn write_atomic_private(
     path: &Path,
     write: impl FnOnce(&mut BufWriter<File>) -> io::Result<()>,
 ) -> io::Result<()> {
-    write_atomic_with(path, true, write)
+    write_atomic_with(path, true, true, write)
+}
+
+/// 同 [`write_atomic`]，但跳过 `fsync`：只 `flush` 到 OS 页缓存、改名覆盖。
+///
+/// 给高频、丢失可容忍的落盘用（学习数据：进程被杀最多丢一个间隔的数据）。
+/// `fsync` 在某些文件系统 / 磁盘卡顿时会阻塞数十秒，而输入法进程的按键回调
+/// 绝不能被磁盘 I/O 拖住——否则整个 fcitx5 主线程卡死、用户无法输入。
+/// 原子性仍由「写临时文件 + rename」保证，掉电时要么是旧文件、要么是新文件。
+pub fn write_atomic_nosync(
+    path: &Path,
+    write: impl FnOnce(&mut BufWriter<File>) -> io::Result<()>,
+) -> io::Result<()> {
+    write_atomic_with(path, false, false, write)
 }
 
 fn write_atomic_with(
     path: &Path,
     private: bool,
+    fsync: bool,
     write: impl FnOnce(&mut BufWriter<File>) -> io::Result<()>,
 ) -> io::Result<()> {
     let temporary = temporary_path(path);
@@ -44,7 +58,11 @@ fn write_atomic_with(
         let mut writer = BufWriter::new(file);
         write(&mut writer)?;
         writer.flush()?;
-        writer.get_ref().sync_all()?;
+        // fsync 会阻塞到磁盘真正写完；配置 / 密钥要它保持久，学习数据丢了能容忍、
+        // 但 fsync 卡住会让输入法主线程死锁，所以学习数据走 write_atomic_nosync 跳过。
+        if fsync {
+            writer.get_ref().sync_all()?;
+        }
         fs::rename(&temporary, path)
     })();
     if result.is_err() {
@@ -70,6 +88,11 @@ fn create(path: &Path, private: bool) -> io::Result<File> {
 /// 把 `text` 原子地写进 `path`。
 pub fn write_atomic_str(path: &Path, text: &str) -> io::Result<()> {
     write_atomic(path, |writer| writer.write_all(text.as_bytes()))
+}
+
+/// 同 [`write_atomic_str`]，但跳过 `fsync`（见 [`write_atomic_nosync`]）。
+pub fn write_atomic_str_nosync(path: &Path, text: &str) -> io::Result<()> {
+    write_atomic_nosync(path, |writer| writer.write_all(text.as_bytes()))
 }
 
 /// 读一个可能被写坏的文本文件：不存在返回 `None`；不是合法 UTF-8 的部分按替换字符读进来，让按行解析去跳过坏行，

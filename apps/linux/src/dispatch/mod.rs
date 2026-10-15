@@ -48,7 +48,7 @@ fn annotation_text(candidate: &qingjian_core::Candidate) -> Option<String> {
     }
 }
 
-/// 学习数据落盘间隔（与 macOS / Windows 壳一致）。
+/// 学习数据落盘间隔（后台 flush 线程用，见 lib.rs）。
 const LEARNING_FLUSH_INTERVAL: Duration = Duration::from_secs(60);
 
 /// 分派器：持有会话状态与从配置来的常量。
@@ -63,7 +63,8 @@ pub struct Dispatch {
     preedit_mode: PreeditMode,
     /// 删候选后的屏幕提示，随下一帧下发、下一次按键清。
     notice: Option<String>,
-    /// 上次把学习数据落盘的时间。
+    /// 上次把学习数据落盘的时间（已移到后台线程，保留字段避免改结构体初始化）。
+    #[allow(dead_code)]
     last_flush: Instant,
     /// 当前应用标识。
     app: Option<String>,
@@ -100,11 +101,15 @@ impl Dispatch {
             engine.set_application(input.app.clone());
         }
         let outcome = key::apply(self, engine, input);
-        self.maybe_flush(engine);
+        // 不在按键回调里落盘：磁盘 I/O（哪怕没 fsync）也不能在主线程做，
+        // 否则文件系统卡顿会让 fcitx5 主线程死锁、用户无法输入。
+        // 落盘交给后台线程（见 lib.rs 的 flush 线程）按 LEARNING_FLUSH_INTERVAL 定时做。
         outcome
     }
 
-    /// 焦点离开：缓冲原样上屏、收起候选窗、落盘。
+    /// 焦点离开：缓冲原样上屏、收起候选窗。
+    ///
+    /// 不在这里落盘（同 `key_event`：不在主线程做磁盘 I/O）；学习数据由后台 flush 线程定时写盘。
     pub fn focus_out(&mut self, engine: &mut Engine) -> KeyOutcome {
         let commit = if !engine.composition().is_empty() {
             engine.take_raw()
@@ -114,8 +119,6 @@ impl Dispatch {
         self.session = Session::default();
         self.notice = None;
         engine.break_chain();
-        engine.flush_learning();
-        self.last_flush = Instant::now();
         KeyOutcome::committed(commit, Frame::empty())
     }
 
@@ -146,7 +149,8 @@ impl Dispatch {
         self.build_frame(engine)
     }
 
-    /// 到点把学习数据落盘。
+    /// 到点把学习数据落盘。已移到后台 flush 线程（见 lib.rs），保留供退出路径用。
+    #[allow(dead_code)]
     fn maybe_flush(&mut self, engine: &mut Engine) {
         if self.last_flush.elapsed() >= LEARNING_FLUSH_INTERVAL {
             engine.flush_learning();

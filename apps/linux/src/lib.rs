@@ -42,6 +42,7 @@ pub extern "C" fn qingjian_init() -> c_int {
     match assembly::init() {
         Ok(host) => {
             let _ = HOST.set(std::sync::Mutex::new(host));
+            spawn_flush_thread();
             0
         }
         Err(error) => {
@@ -51,11 +52,38 @@ pub extern "C" fn qingjian_init() -> c_int {
     }
 }
 
+/// 后台落盘线程：周期性把学习数据写盘。
+///
+/// 关键约束：按键回调（`qingjian_key_event`）绝不能做磁盘 I/O——文件系统 / 磁盘卡顿时
+/// `fsync` 或 `rename` 会阻塞数十秒，而 fcitx5 主线程一旦在按键路径里卡住，整个输入法
+/// D-Bus 不响应，GNOME Shell 报「Error processing key on IM: 已到超时限制」，用户无法输入。
+/// 落盘移到这里后，按键回调只拿锁做内存计算，磁盘 I/O 在本线程做；即便本线程被 I/O 拖住，
+/// 按键回调仍能拿到锁（锁的持有窗口只是 `flush_learning` 内部的内存操作 + 触发 I/O，
+/// 而学习数据落盘已改用 `write_atomic_nosync` 跳过 `fsync`，I/O 只到页缓存，不会长阻塞）。
+fn spawn_flush_thread() {
+    std::thread::Builder::new()
+        .name("qingjian-flush".to_owned())
+        .spawn(move || {
+            // 与壳内 LEARNING_FLUSH_INTERVAL 一致。
+            let interval = std::time::Duration::from_secs(60);
+            loop {
+                std::thread::sleep(interval);
+                // 拿锁落盘；拿不到（按键正在用）就跳过这轮，不与按键争抢。
+                if let Some(mutex) = HOST.get()
+                    && let Ok(mut host) = mutex.lock()
+                {
+                    host.engine.flush_learning();
+                }
+            }
+        })
+        .ok();
+}
+
 /// 释放单例。fcitx5 卸载 addon 时调；之后若再用要先 `qingjian_init`。
 #[unsafe(no_mangle)]
 pub extern "C" fn qingjian_shutdown() {
     // OnceLock 没法取走，只能让它空着；进程退出时自然释放。
-    // 真正的落盘在 focus_out / 定时 flush 里已经做过。
+    // 退出前最后一次落盘（后台 flush 线程是 60s 一轮，可能刚写完不久、也可能还有未落盘的）。
     if let Some(mutex) = HOST.get()
         && let Ok(mut host) = mutex.lock()
     {

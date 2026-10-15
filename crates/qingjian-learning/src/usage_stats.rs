@@ -3,7 +3,7 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use jiff::civil::Date;
-use qingjian_core::storage::{read_text_lossy, write_atomic_str};
+use qingjian_core::storage::{read_text_lossy, write_atomic_str_nosync};
 use qingjian_core::{Usage, UsageMeter, UsageSummary};
 
 use crate::error::LearningError;
@@ -103,7 +103,7 @@ impl UsageStats {
                 usage.hanzi, usage.words, usage.english_words, usage.commits
             );
         }
-        write_atomic_str(path, &text)?;
+        write_atomic_str_nosync(path, &text)?;
         Ok(())
     }
 }

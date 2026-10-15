@@ -53,7 +53,7 @@ impl FrequencyLearner {
     pub(super) fn save_english_to(&mut self, path: &Path) -> Result<(), LearningError> {
         let mut rows: Vec<&(String, u32)> = self.english.values().collect();
         rows.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
-        write_atomic(path, |file| {
+        write_atomic_nosync(path, |file| {
             writeln!(file, "# 青简个人英文词：词\\t次数")?;
             for (word, count) in rows {
                 writeln!(file, "{word}\t{count}")?;
@@ -98,7 +98,7 @@ impl FrequencyLearner {
                 .then_with(|| b.2.cmp(a.2))
                 .then_with(|| a.1.cmp(b.1))
         });
-        write_atomic(path, |file| {
+        write_atomic_nosync(path, |file| {
             writeln!(file, "# 青简按输入串记的选择：输入串\t词\t次数")?;
             for (input, text, count) in rows {
                 writeln!(file, "{input}\t{text}\t{count}")?;
@@ -147,7 +147,7 @@ impl FrequencyLearner {
                 .then_with(|| b.2.cmp(a.2))
                 .then_with(|| a.1.cmp(b.1))
         });
-        write_atomic(path, |file| {
+        write_atomic_nosync(path, |file| {
             writeln!(file, "# 青简个人敲错表：敲的\t要的\t次数")?;
             for (typed, intended, count) in rows {
                 writeln!(file, "{typed}\t{intended}\t{count}")?;
@@ -196,7 +196,7 @@ impl FrequencyLearner {
 
     pub(super) fn save_ngram_to(&mut self, path: &Path) -> Result<(), LearningError> {
         let tsv = self.ngram.to_tsv();
-        write_atomic(path, |file| {
+        write_atomic_nosync(path, |file| {
             writeln!(file, "# 青简个人 n-gram：前词\t后词\t次数，句首用 <s>")?;
             file.write_all(tsv.as_bytes())
         })?;
@@ -245,7 +245,7 @@ impl FrequencyLearner {
     }
 
     pub(super) fn save_words_to(&mut self, path: &Path) -> Result<(), LearningError> {
-        write_atomic(path, |file| {
+        write_atomic_nosync(path, |file| {
             writeln!(file, "# 青简用户词：词\\t拼音\\t词频，与主词库同格式")?;
             for (text, pinyin) in &self.words {
                 writeln!(file, "{text}\t{pinyin}\t{USER_WORD_FREQUENCY}")?;

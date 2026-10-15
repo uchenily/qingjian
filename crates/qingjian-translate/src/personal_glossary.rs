@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
-use qingjian_core::storage::{read_text_lossy, write_atomic_str};
+use qingjian_core::storage::{read_text_lossy, write_atomic_str_nosync};
 use qingjian_core::{Language, Sense, Translation};
 
 use crate::GlossaryError;
@@ -110,7 +110,7 @@ impl PersonalGlossary {
             }
             text.push('\n');
         }
-        write_atomic_str(path, &text)?;
+        write_atomic_str_nosync(path, &text)?;
         Ok(())
     }
 }
