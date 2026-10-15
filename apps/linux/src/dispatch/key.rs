@@ -236,8 +236,14 @@ fn apply_function_key(
             KeyOutcome::consumed(frame_after(dispatch, engine))
         }
         XK_RIGHT => {
-            engine.move_cursor_right();
-            KeyOutcome::consumed(frame_after(dispatch, engine))
+            // 有候选且高亮候选带译词时：右箭头上屏第一条译词（如「英语 n. English」上屏 English）。
+            // 没有候选或该候选没有译词时，退回移动光标。
+            if let Some(text) = commit_translation_of_highlighted(dispatch, engine) {
+                KeyOutcome::committed(text, frame_after(dispatch, engine))
+            } else {
+                engine.move_cursor_right();
+                KeyOutcome::consumed(frame_after(dispatch, engine))
+            }
         }
         XK_HOME => {
             engine.move_cursor_home();
@@ -387,6 +393,16 @@ fn apply_printable(
     engine.push(c);
     dispatch.refresh(engine);
     KeyOutcome::consumed(dispatch.current_frame(engine))
+}
+
+/// 上屏高亮候选的第一条译词；没有候选或该候选没有译词时返回 `None`（调用方退回移动光标）。
+fn commit_translation_of_highlighted(dispatch: &mut Dispatch, engine: &mut Engine) -> Option<String> {
+    let index = dispatch.session().highlighted();
+    let candidate = dispatch.session().candidate(index)?;
+    let text = engine.commit_translation(&candidate, 0)?;
+    tracing::debug!(%text, "commit translation");
+    dispatch.refresh(engine);
+    Some(text)
 }
 
 /// 上屏高亮候选；没有候选时缓冲原样上屏。

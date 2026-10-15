@@ -95,15 +95,11 @@ macro_rules! template_apps {
     };
 }
 
-/// 模板 `[shortcut]` 一节里的修饰键组合（macOS 命名）。缺省值两个平台一样，只是写法与注释按平台的键名。
+/// 模板 `[shortcut]` 一节里的修饰键组合（macOS 命名）。
 #[cfg(target_os = "macos")]
 macro_rules! template_shortcut_keys {
     () => {
-        r#"# 数字键配这些修饰键上屏候选的译词：translation 第一个译词，translation_second 第二个（候选右侧有两个译词时）
-# 任意修饰键组合（option / shift / control / command 用 + 连），偏好设置里点按钮录制；别用 control+数字（系统切桌面）和 command+数字（应用切标签页）
-translation = "option"
-translation_second = "shift+option"
-# 数字键配这些修饰键删掉候选：用户词（自动造的）整个删掉，词库里的词清掉对它的学习记录。组句中要打感叹号先把词上屏
+        r#"# 数字键配这些修饰键删掉候选：用户词（自动造的）整个删掉，词库里的词清掉对它的学习记录。组句中要打感叹号先把词上屏
 delete_candidate = "shift"
 "#
     };
@@ -113,11 +109,7 @@ delete_candidate = "shift"
 #[cfg(windows)]
 macro_rules! template_shortcut_keys {
     () => {
-        r#"# 数字键配这些修饰键上屏候选的译词：translation 第一个译词，translation_second 第二个（候选右侧有两个译词时）
-# 任意修饰键组合（alt / shift / ctrl / win 用 + 连）。Alt+数字会被 Windows 当菜单快捷键截走，缺省用 Ctrl；组句时才拦，不打字时照常放行给应用
-translation = "ctrl"
-translation_second = "shift+ctrl"
-# 数字键配这些修饰键删掉候选：用户词（自动造的）整个删掉，词库里的词清掉对它的学习记录。组句中要打感叹号先把词上屏
+        r#"# 数字键配这些修饰键删掉候选：用户词（自动造的）整个删掉，词库里的词清掉对它的学习记录。组句中要打感叹号先把词上屏
 delete_candidate = "shift"
 "#
     };
@@ -128,11 +120,7 @@ delete_candidate = "shift"
 #[cfg(all(unix, not(target_os = "macos")))]
 macro_rules! template_shortcut_keys {
     () => {
-        r#"# 数字键配这些修饰键上屏候选的译词：translation 第一个译词，translation_second 第二个（候选右侧有两个译词时）
-# 任意修饰键组合（alt / shift / ctrl / super 用 + 连）；避开 ctrl+数字（系统切桌面）和 super+数字（桌面切工作区）
-translation = "alt"
-translation_second = "shift+alt"
-# 数字键配这些修饰键删掉候选：用户词（自动造的）整个删掉，词库里的词清掉对它的学习记录。组句中要打感叹号先把词上屏
+        r#"# 数字键配这些修饰键删掉候选：用户词（自动造的）整个删掉，词库里的词清掉对它的学习记录。组句中要打感叹号先把词上屏
 delete_candidate = "shift"
 "#
     };
@@ -464,7 +452,7 @@ mod tests {
         assert_eq!(config.general.shuangpin(), None);
         assert_eq!(config.general.log_level, LogLevel::Info);
         assert_eq!(config.shortcut.mode.expression, 'i');
-        assert_eq!(config.shortcut.translation, Modifiers::OPTION);
+        assert_eq!(config.shortcut.delete_keys(), Modifiers::SHIFT);
     }
 
     #[test]
