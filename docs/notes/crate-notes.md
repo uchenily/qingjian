@@ -106,7 +106,7 @@ IMK 输入法，源码按 `app / host / imk / candidates / menubar / preferences
 - 日志在 `~/Library/Logs/Qingjian/`（按天分文件留 7 天，删了会重建），用户数据与配置在 `~/Library/Application Support/Qingjian/`。
 - 配置项：本地神经重打分 `[model]`（偏好设置「高级」页开关）；模糊音 `[fuzzy]` 默认都关；`[general]` 学习语言 / 每页候选数 / 翻页键 / 外观 / 竖排横排 / 拼音显示位置 /
   英文模式候选开关 / 双拼方案 `shuangpin`（小鹤 / 自然码 / 微软 / 搜狗，空为全拼）/ 日志级别 `log_level`（缺省 info 不含敲的内容，debug 逐键记，热切换）/ 输入日志 `input_log`；
-  `[shortcut]` 表达式模式键 v、上屏第一 / 第二个译词的修饰键 `translation` / `translation_second`、删候选 `delete_candidate`（缺省 shift，用户词整删、词库词清学习）；
+  `[shortcut]` 表达式模式键 v、删候选 `delete_candidate`（缺省 shift，用户词整删、词库词清学习）；
   `[apps] english_candidates_off` 按 bundle identifier 列出英文模式不给候选的应用（缺省终端 / 编辑器 / IDE，`*` 前缀匹配）；
   `[dictionaries] domains` 打开随包的领域词库（`Resources/dicts/` 11 本，缺省只开 `idioms`），`disabled` 关掉用户目录 `dicts/` 里的某本导入词库；
   偏好设置「词库」页随包的可开关、导入的可开关 / 移除，可导入 TSV / Rime yaml / .qj。

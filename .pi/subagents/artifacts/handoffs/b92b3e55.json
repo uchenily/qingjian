@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "runId": "b92b3e55",
+  "mode": "parallel",
+  "source": "foreground",
+  "cwd": "/home/chen/Programming/qingjian",
+  "createdAt": 1792045388660,
+  "updatedAt": 1792045388660,
+  "groups": [
+    {
+      "stepIndex": 0,
+      "baseCommit": "146d6bc7e5e4ef9b47f5b3b0d823acef5f54ecb0",
+      "repoRoot": "/home/chen/Programming/qingjian",
+      "children": [],
+      "cleanup": {
+        "state": "partial",
+        "pruned": false,
+        "tasks": [
+          {
+            "index": 0,
+            "path": "/tmp/pi-worktree-b92b3e55-0",
+            "branch": "pi-parallel-b92b3e55-0",
+            "worktreeRemoved": false,
+            "branchRemoved": false,
+            "preserved": true,
+            "reason": "cleanup pending durable handoff capture"
+          }
+        ]
+      }
+    }
+  ]
+}

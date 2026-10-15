@@ -18,7 +18,7 @@
 - [x] 中→英释义：`tools/dict-convert` 从 CC-CEDICT 生成 11.5 万条（CC BY-SA 4.0，可发布）
 - [x] 带词性的中英 / 中日释义表：`tools/gloss-gen` 用 LLM 批量生成（2026-09-05 起覆盖整个自建词库 23.9 万词，词性 + 英文译词 + 日文译词与假名，`assets/glossary/`），
   `Sense.reading` + 汉字注平假名（`candidate::furigana`）；取代 CC-CEDICT 表做随包数据
-- [x] Option+数字上屏候选的译文（`Engine::commit_translation`，控制器在 `handleEvent:client:` 里按键码认，其余交父类）
+- [x] 上屏候选的译文（`Engine::commit_translation`）：Linux 右箭头上屏高亮候选的第一条译词
 - [x] 整段切不动时取能切分的最长前缀出候选，剩余字母作为未切分尾部保留（`kaifv` → `kai'f'v`）
 - [x] 整句转换（bigram + Viterbi），含简拼整句（`wxqcf` → 我想去蹭饭 / `jttqhh` → 今天天气很好）
 - [x] 模糊音（Core `fuzzy`，配置 `[fuzzy]`）：z/zh、c/ch、s/sh、n/l、f/h、l/r、an/ang、en/eng、in/ing，
@@ -128,10 +128,10 @@
 - [x] 中文 → English、中文 → 日本語：`tools/gloss-gen` LLM 批量生成 6.4 万常用词（词性、译词、日文假名），随包表；日文按汉字段注平假名
 - [x] 本地词典：`Glossary` 内存查表，格式 `词\t词性. 译词[|假名]`；CC-CEDICT 表保留为备用来源
 - [x] 翻译语言设置：`[general] learning_language`，菜单与偏好设置只列打进包里有释义表的语言
-- [x] Option+数字上屏候选的译文
+- [x] 上屏候选的译文：Linux 右箭头上屏高亮候选的第一条译词
 - [x] 释义表随仓库发布（`assets/glossary/`，2026-09-05）：中→英 / 日覆盖整个自建词库 24.9 万词，多字词 91.6% 有英文释义、98% 日文；
   英→中 4.5 万词（wordfreq ≥ 2500 + 技术词），英文候选右侧显示中文（Engine 按候选种类查表）；三张表都进 `.qj`
-- [x] 上屏译词：⌥ + 数字第一条、⇧⌥ + 数字第二条，修饰键可录制；⌃⌥T 翻译应用里选中的文字（云服务）
+- [x] 上屏译词：Linux 右箭头上屏高亮候选的第一条译词；⌃⌥T 翻译应用里选中的文字（云服务）
 - [x] 释义兜底（2026-09-06）：Core `GlossFiller` trait（与 `Predictor` 分开：独立线程、攒批、不丢请求），随包表查不到的词库词 / 云端词**上屏后**入队，
   `qingjian-predict::CloudGlossFiller` 攒 1.5 秒或 8 个词发一次（提示词与 gloss-gen 同源，只要当前学习语言），结果经 `Translator::learn` 进
   `qingjian-translate::PersonalGlossary`（`user-glossary-<语言>.tsv`，格式同随包表，可手改，`LayeredTranslator` 个人表优先），随 flush 落盘；
