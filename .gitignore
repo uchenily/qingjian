@@ -6,3 +6,4 @@
 /logs
 /data
 .playwright-mcp/
+.pi/
