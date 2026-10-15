@@ -188,7 +188,7 @@ impl QingjianInputController {
         };
         // 提示在显示：敲任何键先收掉，键照常处理
         host::with(|h| h.clear_notice());
-        // 修饰键 + 数字：按配置的两组组合上屏第一 / 第二个译词（缺省 ⌥ 与 ⇧⌥）、删候选（缺省 ⇧）。
+        // 修饰键 + 数字：删候选（缺省 ⇧）。
         // 只在组句中认：不在组句时 ⇧4 就是 `$`，得走下面的标点转换（中文模式出 ￥、⇧6 出 ……、⇧1 出 ！），
         // 以前在这里被截走后原样还给应用，全角转换就没机会做了。
         // 表达式模式（`v2^3`）里 ⇧+数字打的是 `^ * ( )`，不当快捷键
@@ -199,13 +199,6 @@ impl QingjianInputController {
             && !pressed.is_empty()
             && let Some(digit) = digit_key(key)
         {
-            let (first, second) = host::with(|h| h.translation_keys).unwrap_or_default();
-            if pressed == first {
-                return self.handle_translation_key(digit, 0, client);
-            }
-            if pressed == second {
-                return self.handle_translation_key(digit, 1, client);
-            }
             if pressed == host::with(|h| h.delete_keys).unwrap_or_default() {
                 return self.handle_delete_key(digit, client);
             }
@@ -243,30 +236,6 @@ impl QingjianInputController {
             Some(text) if !text.is_empty() => self.handle_text(&text.to_string(), client),
             _ => false,
         }
-    }
-
-    fn handle_translation_key(&self, digit: usize, sense: usize, client: TextClient<'_>) -> bool {
-        let composing = host::with(|h| !h.engine.composition().is_empty()).unwrap_or(false);
-        if !composing {
-            return false;
-        }
-        let candidate = host::with(|h| {
-            h.session
-                .index_on_page(digit - 1)
-                .and_then(|index| h.session.candidate(index))
-        })
-        .flatten();
-        let text = candidate
-            .and_then(|c| host::with(|h| h.engine.commit_translation(&c, sense)).flatten());
-        match text {
-            Some(text) => {
-                tracing::debug!(%text, "commit translation");
-                client.insert_text(&text);
-                self.refresh(client);
-            }
-            None => tracing::debug!(digit, sense, "这个候选没有这条译文"),
-        }
-        true
     }
 
     /// 修饰键 + 数字（缺省 ⇧）：删掉当前页第几个候选。不在组句中不管；那格没有候选就吞掉按键不动。

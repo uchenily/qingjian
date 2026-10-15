@@ -74,13 +74,7 @@ pub enum Setting {
     /// `[general] preedit`，弹出菜单。
     Preedit,
 
-    /// `[shortcut] translation`，快捷键录制按钮（只记修饰键）。
-    TranslationKeys,
-
-    /// `[shortcut] translation_second`，同上。
-    TranslationSecondKeys,
-
-    /// 「恢复默认快捷键」按钮：翻页键、模式键、译词快捷键全部回缺省。
+    /// 「恢复默认快捷键」按钮：翻页键、模式键、删候选快捷键全部回缺省。
     ResetShortcuts,
 
     /// 「导入词库…」按钮：选文件，转成 `.qj` 放进用户目录 `dicts/`。
@@ -131,8 +125,6 @@ impl Setting {
             Self::OpenConfigFile => 11,
             Self::Layout => 12,
             Self::Preedit => 13,
-            Self::TranslationKeys => 15,
-            Self::TranslationSecondKeys => 16,
             Self::ResetShortcuts => 18,
             Self::ImportDictionary => 19,
             Self::Shuangpin => 20,
@@ -169,8 +161,6 @@ impl Setting {
             11 => Self::OpenConfigFile,
             12 => Self::Layout,
             13 => Self::Preedit,
-            15 => Self::TranslationKeys,
-            16 => Self::TranslationSecondKeys,
             18 => Self::ResetShortcuts,
             19 => Self::ImportDictionary,
             20 => Self::Shuangpin,
@@ -223,8 +213,6 @@ mod tests {
             Setting::OpenConfigFile,
             Setting::Layout,
             Setting::Preedit,
-            Setting::TranslationKeys,
-            Setting::TranslationSecondKeys,
             Setting::ResetShortcuts,
             Setting::ImportDictionary,
             Setting::Shuangpin,

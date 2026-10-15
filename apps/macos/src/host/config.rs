@@ -20,7 +20,6 @@ impl Host {
         self.engine.set_mode_keys(config.shortcut.mode);
         self.engine.set_shuangpin(config.general.shuangpin());
         logging::set_level(config.general.log_level);
-        self.translation_keys = config.shortcut.translation_keys();
         self.delete_keys = config.shortcut.delete_keys();
         self.page_size = config.general.page_size();
         self.page_keys = config.general.page_keys();

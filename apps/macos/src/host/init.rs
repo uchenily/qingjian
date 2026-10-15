@@ -135,7 +135,6 @@ pub fn init(mtm: MainThreadMarker, info: &BundleInfo) -> Result<(), HostError> {
             build: info.build.clone(),
             page_size: 9,
             page_keys: qingjian_platform::DEFAULT_PAGE_KEYS,
-            translation_keys: ShortcutConfig::default().translation_keys(),
             delete_keys: ShortcutConfig::default().delete_keys(),
             status: None,
             input_log_enabled: None,

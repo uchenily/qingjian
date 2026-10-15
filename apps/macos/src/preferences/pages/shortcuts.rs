@@ -21,12 +21,6 @@ pub struct ShortcutsPage {
     /// 表达式模式键。
     expression: Retained<NSPopUpButton>,
 
-    /// 上屏第一个译词的修饰键。
-    translation: Retained<KeyRecorder>,
-
-    /// 上屏第二个译词的修饰键。
-    translation_second: Retained<KeyRecorder>,
-
     /// 删除候选的修饰键。
     delete_candidate: Retained<KeyRecorder>,
 }
@@ -65,28 +59,6 @@ impl ShortcutsPage {
             "这个字母开头进表达式模式：v1+2 出 3。",
         );
         layout.space(GROUP_GAP);
-        let translation = row_recorder(
-            layout,
-            mtm,
-            "上屏第一个译词",
-            Setting::TranslationKeys,
-            true,
-            target,
-        );
-        let translation_second = row_recorder(
-            layout,
-            mtm,
-            "上屏第二个译词",
-            Setting::TranslationSecondKeys,
-            true,
-            target,
-        );
-        note(
-            layout,
-            mtm,
-            "按住修饰键再按候选序号，上屏的是候选右侧的译词而不是中文；候选有两个译词时第二组键上屏后一个。两组不能相同。",
-        );
-        layout.space(GROUP_GAP);
         let delete_candidate = row_recorder(
             layout,
             mtm,
@@ -120,8 +92,6 @@ impl ShortcutsPage {
         Self {
             page_keys,
             expression,
-            translation,
-            translation_second,
             delete_candidate,
         }
     }
@@ -140,9 +110,6 @@ impl ShortcutsPage {
                 .iter()
                 .position(|k| *k == keys.expression),
         );
-        let (first, second) = config.shortcut.translation_keys();
-        self.translation.show(&first.key(), &first.label());
-        self.translation_second.show(&second.key(), &second.label());
         let delete = config.shortcut.delete_keys();
         self.delete_candidate.show(&delete.key(), &delete.label());
     }

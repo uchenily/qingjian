@@ -198,31 +198,11 @@ impl Host {
                     }
                 }
             }
-            (
-                Setting::TranslationKeys | Setting::TranslationSecondKeys,
-                SettingValue::Text(text),
-            ) => match text.parse::<Modifiers>() {
-                Ok(chosen) => {
-                    let (first, second) = config.shortcut.translation_keys();
-                    let (name, other) = if setting == Setting::TranslationKeys {
-                        ("translation", second)
-                    } else {
-                        ("translation_second", first)
-                    };
-                    if chosen == other {
-                        tracing::warn!("两组译词快捷键不能相同，未改");
-                    } else {
-                        self.settings.set_value("shortcut", name, chosen.key());
-                    }
-                }
-                Err(error) => tracing::warn!(%error, "修饰键组合不合法，未改"),
-            },
             (Setting::DeleteCandidateKeys, SettingValue::Text(text)) => {
                 match text.parse::<Modifiers>() {
                     Ok(chosen) => {
-                        let (first, second) = config.shortcut.translation_keys();
-                        if chosen == first || chosen == second {
-                            tracing::warn!("删候选的快捷键不能与译词快捷键相同，未改");
+                        if chosen.is_empty() {
+                            tracing::warn!("删候选的快捷键不能为空，未改");
                         } else {
                             self.settings
                                 .set_value("shortcut", "delete_candidate", chosen.key());
@@ -239,13 +219,6 @@ impl Host {
                     "shortcut",
                     "expression",
                     defaults.mode.expression.to_string(),
-                );
-                self.settings
-                    .set_value("shortcut", "translation", defaults.translation.key());
-                self.settings.set_value(
-                    "shortcut",
-                    "translation_second",
-                    defaults.translation_second.key(),
                 );
                 self.settings.set_value(
                     "shortcut",
