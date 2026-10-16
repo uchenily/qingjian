@@ -105,9 +105,8 @@ impl Engine {
         let scope: &str = query_decoded.map_or(keys, |d| d.pinyin());
         let parsed = match (query_decoded, &english_tail) {
             (Some(d), tail) if head_wins || tail.is_none() => d
-                .segmentation()
-                .map(|s| (vec![s], d.tail()))
-                .ok_or(ParseError::NoSegmentation),
+                .segmentations()
+                .or_else(|_| segment_longest_prefix(keys).map(|(s, t)| (s, t.to_owned()))),
             (None, Some(tail)) if head_wins => {
                 // 全拼下 `decode` 返回 None。句首英文词（`head_len=0`）按后段切，否则按前段切。
                 let pinyin_segment = if tail.head_len == 0 {
@@ -115,14 +114,13 @@ impl Engine {
                 } else {
                     &keys[..tail.head_len]
                 };
-                parser::segment(pinyin_segment).map(|s| (s, ""))
+                parser::segment(pinyin_segment).map(|s| (s, String::new()))
             }
             // 英文切法没赢（拼音更通顺）：按完整解码的全拼切分。
             (Some(d), Some(_)) => d
-                .segmentation()
-                .map(|s| (vec![s], d.tail()))
-                .ok_or(ParseError::NoSegmentation),
-            _ => segment_longest_prefix(keys),
+                .segmentations()
+                .or_else(|_| segment_longest_prefix(keys).map(|(s, t)| (s, t.to_owned()))),
+            _ => segment_longest_prefix(keys).map(|(s, t)| (s, t.to_owned())),
         };
         // 连第一个字母都切不动（`impor`）：拼音这边没戏，但英文词 / 补全、快捷候选还可以有
         let (segmentations, tail) = match parsed {
@@ -154,7 +152,7 @@ impl Engine {
             }
         };
         // 拼音「不像话」时试拼写纠错；纠正生效则按纠正后的切分查词，原串只用来记学习与显示
-        let unlikely = correction::unlikely_pinyin(segmentations.first(), tail)
+        let unlikely = correction::unlikely_pinyin(segmentations.first(), &tail)
             || correction::trailing_single_letter(segmentations.first());
         let correction = if unlikely {
             self.active_correction(scope)
@@ -163,7 +161,7 @@ impl Engine {
         };
         let (segmentations, tail): (Vec<Segmentation>, &str) = match &correction {
             Some(c) => (vec![c.segmentation.clone()], ""),
-            None => (segmentations, tail),
+            None => (segmentations, &tail),
         };
         let parse = start.elapsed();
 
@@ -176,7 +174,7 @@ impl Engine {
             let count = patterns.len();
             let last = &segmentation.syllables[count - 1];
             // 最后一个音节即使打完了也可能还没打完（`xia` 可能是 `xiang` 的前缀），按前缀查；双拼两键就是定局
-            if last.complete && query_decoded.is_none() && parser::is_syllable_prefix(&last.text) {
+            if last.complete && self.shuangpin.is_none() && parser::is_syllable_prefix(&last.text) {
                 patterns[count - 1].complete = false;
             }
             // 词级候选只按敲的原样与模糊音查，敲错变体只进整句词图（它的候选从那边插进来）：
@@ -289,7 +287,7 @@ impl Engine {
         // 双拼 + 英文尾段且英文切法赢时，整段 decode 会把英文词拆坏（`ysdocker...` → `yong'duo'cker...`），
         // 按英文尾段的拆分分别 decode 头段、后段，英文词原样夹中间：`yong'docker'bu'shu'hen'fang'bian`。
         // 英文切法没赢（`keyi`→`ke'yi` 可以更通顺）时走整段 decode，preedit 是 `ke'yi`。
-        // 全拼下 `typed_display` 本就是 `None`（走 `join_marked`），不动。
+        // 全拼的 `marked` 不带音节分隔（`kaifa` 而非 `kai'fa`），交给 `join_marked` 处理，所以全拼时给 `None`。
         let typed_display = if self.shuangpin.is_some() {
             if let Some(t) = english_tail.filter(|_| head_wins) {
                 let head = self.decode(&keys[..t.head_len]).map(|d| d.pinyin().to_owned()).unwrap_or_default();
@@ -315,7 +313,7 @@ impl Engine {
                 decoded.as_ref().map(|d| d.marked())
             }
         } else {
-            decoded.as_ref().map(|d| d.marked())
+            None
         };
         Ok(Query {
             segmentations,
@@ -423,11 +421,7 @@ impl Engine {
         // `head_wins` 时 `segmentations` 是头段切分，拼音整句要按完整输入重新切分生成
         // （`woxiangxuehaorust` 的拼音整句是 我想学好如石头，不是头段的 我想学好）。
         let full_segmentation = |text: &str| {
-            if self.shuangpin.is_some() {
-                self.decode(text).and_then(|d| d.segmentation())
-            } else {
-                parser::segment(text).ok()?.into_iter().next()
-            }
+            self.decode(text).and_then(|d| d.segmentation())
         };
         let plain = if head_wins && english_tail.is_some() {
             // 英文切法排第一时，拼音整句按完整输入切分排第二。
@@ -448,34 +442,29 @@ impl Engine {
         // 双拼下先把键串解成全拼再喂模型：模型训练时见的是全拼字母。双拼+英文混输时按 `split_english_tail`
         // 的拆分把头段、后段分别解成全拼，英文词原样夹在中间——这正是模型见过的形态。
         let gen_keys: Option<String> = if keys.len() >= 6 {
-            if self.shuangpin.is_some() {
-                // 双拼：头段全拼 + 英文词 + 后段全拼（英文段不解码，原样保留）
-                // 只在英文切法赢（`head_wins`）时按英文尾段拆分；拼音更通顺时整段解码成全拼
-                let tail = english_tail.filter(|_| head_wins);
-                // 无英文尾段时整段当头段解码成全拼；有尾段时头段是英文词之前的部分
-                let head_len = tail.map(|t| t.head_len).unwrap_or(keys.len());
-                let head = &keys[..head_len];
-                let word_end = tail.map(|t| t.word_end).unwrap_or(keys.len());
-                let word = tail.map(|t| t.word.as_str()).unwrap_or("");
-                let suffix = &keys[word_end..];
-                let head_pinyin = if head.is_empty() {
-                    String::new()
-                } else {
-                    self.decode(head).map(|d| d.pinyin().replace(['\'', '\"'], "")).unwrap_or_else(|| head.to_owned())
-                };
-                let suffix_pinyin = if suffix.is_empty() {
-                    String::new()
-                } else {
-                    self.decode(suffix).map(|d| d.pinyin().replace(['\'', '\"'], "")).unwrap_or_else(|| suffix.to_owned())
-                };
-                let gk = format!("{head_pinyin}{word}{suffix_pinyin}");
-                if gk.bytes().all(|b| b.is_ascii_alphabetic()) {
-                    Some(gk)
-                } else {
-                    None
-                }
-            } else if keys.bytes().all(|b| b.is_ascii_lowercase()) {
-                Some(keys.to_owned())
+            // 头段全拼 + 英文词 + 后段全拼（英文段不解码，原样保留）
+            // 只在英文切法赢（`head_wins`）时按英文尾段拆分；拼音更通顺时整段解码成全拼。
+            // 全拼 `decode` 返回自身，双拼按方案解码成全拼——统一走 `decode`。
+            let tail = english_tail.filter(|_| head_wins);
+            // 无英文尾段时整段当头段解码成全拼；有尾段时头段是英文词之前的部分
+            let head_len = tail.map(|t| t.head_len).unwrap_or(keys.len());
+            let head = &keys[..head_len];
+            let word_end = tail.map(|t| t.word_end).unwrap_or(keys.len());
+            let word = tail.map(|t| t.word.as_str()).unwrap_or("");
+            let suffix = &keys[word_end..];
+            let head_pinyin = if head.is_empty() {
+                String::new()
+            } else {
+                self.decode(head).map(|d| d.pinyin().replace(['\'', '"'], "")).unwrap_or_else(|| head.to_owned())
+            };
+            let suffix_pinyin = if suffix.is_empty() {
+                String::new()
+            } else {
+                self.decode(suffix).map(|d| d.pinyin().replace(['\'', '"'], "")).unwrap_or_else(|| suffix.to_owned())
+            };
+            let gk = format!("{head_pinyin}{word}{suffix_pinyin}");
+            if gk.bytes().all(|b| b.is_ascii_alphabetic()) {
+                Some(gk)
             } else {
                 None
             }

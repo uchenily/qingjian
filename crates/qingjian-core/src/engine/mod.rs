@@ -211,8 +211,6 @@ const MIN_COMPLETION_LETTERS: usize = 3;
 /// 整段末尾当英文词的尾段至少几个字母，前面的拼音头至少几个字母（见 `query::EnglishTail`）。
 const MIN_ENGLISH_TAIL_LETTERS: usize = 2;
 const MIN_ENGLISH_TAIL_HEAD_LETTERS: usize = 2;
-/// 双拼键两两成音节，短英文串更容易被误切成拼音，至少两个字母才视为英文（与全拼一致）。
-const MIN_SHUANGPIN_ENGLISH_TAIL_LETTERS: usize = 2;
 
 /// 尾段自己也是合法拼音时（`fan`、`database`）至少几个字母才考虑英文读法：与尾段最少字母一致，不再额外限制。
 const MIN_PINYIN_LIKE_TAIL_LETTERS: usize = 2;

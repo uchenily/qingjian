@@ -36,9 +36,17 @@ impl Engine {
     }
 
     /// 双拼开着时把一段键解成全拼；全拼下为 `None`，调用方原样用键。
+    /// 把作用域键串解成全拼视图：双拼按方案解码，全拼就是自身。返回 `Some` 后查询层不再需要判
+    /// `shuangpin.is_some()`——统一用 `decoded.pinyin()` 等。全拼的切分仍由查询层的 `parser` 处理，
+    /// `decoded.segmentation()` 返回 `None`。
     pub(super) fn decode(&self, keys: &str) -> Option<EngineDecoded> {
-        self.shuangpin
-            .map(|scheme| EngineDecoded::Shuangpin(scheme.decode(keys)))
+        match self.shuangpin {
+            Some(scheme) => Some(EngineDecoded::Shuangpin(scheme.decode(keys))),
+            None => Some(EngineDecoded::Pinyin {
+                pinyin: keys.to_owned(),
+                complete: crate::parser::is_fully_segmentable(keys),
+            }),
+        }
     }
 
     /// 光标后剩余拼音的显示形式：双拼先解码；能切就按音节用 `'` 连上，切不动就原样。

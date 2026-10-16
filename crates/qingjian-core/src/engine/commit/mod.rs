@@ -307,7 +307,8 @@ impl Engine {
     /// 双拼不记（键与全拼对不上）。
     pub(super) fn accepted_typos(&self, candidate: &Candidate) -> Vec<(String, String)> {
         let keys = self.composition.scope();
-        if self.decode(keys).is_some() {
+        // 双拼不记敲错（键不对应拼音字母）；全拼有纠错时按纠正后的拼音对齐找敲错对
+        if self.shuangpin.is_some() {
             return Vec::new();
         }
         match self.active_correction(keys) {
@@ -335,7 +336,11 @@ impl Engine {
         }
         let conversion = match (self.decode(scope), self.active_correction(scope)) {
             (Some(decoded), _) => {
-                self.convert_sentence(&decoded.segmentation()?.patterns(), true)?
+                let segs = match decoded.segmentations() {
+                    Ok((s, _)) => s,
+                    Err(_) => segment_longest_prefix(scope).ok()?.0,
+                };
+                self.convert_sentence(&segs.first()?.patterns(), true)?
             }
             (None, Some(c)) => self.convert_sentence(&c.segmentation.patterns(), false)?,
             (None, None) => {
@@ -411,6 +416,15 @@ impl Engine {
         if candidate.kind == CandidateKind::Sentence && self.split_english_tail(keys).is_some() {
             return (keys.len(), keys.to_owned());
         }
+        // 纠错生效时按纠正后的拼音算，再换算回原串；双拼按解出的全拼算，再换算回键数。
+        // 全拼无纠错时 `decode` 返回原串，`align` 直接按原串对齐。
+        if let Some(c) = self.active_correction(keys) {
+            let consumed = c
+                .edit
+                .to_original(self.align(&c.corrected, &candidate.syllables).consumed)
+                .min(keys.len());
+            return (consumed, choice_key(keys, consumed));
+        }
         if let Some(decoded) = self.decode(keys) {
             let pinyin_len = self.align(decoded.pinyin(), &candidate.syllables).consumed;
             return (
@@ -418,13 +432,7 @@ impl Engine {
                 choice_key(decoded.pinyin(), pinyin_len),
             );
         }
-        let consumed = match self.active_correction(keys) {
-            Some(c) => c
-                .edit
-                .to_original(self.align(&c.corrected, &candidate.syllables).consumed)
-                .min(keys.len()),
-            None => self.align(keys, &candidate.syllables).consumed,
-        };
+        let consumed = self.align(keys, &candidate.syllables).consumed;
         (consumed, choice_key(keys, consumed))
     }
 

@@ -54,22 +54,19 @@ impl Engine {
         {
             return None;
         }
-        let shuangpin = self.shuangpin.is_some();
         let lists = self.english_lists();
         if lists.is_empty() {
             return None;
         }
-        if shuangpin {
-            return self.split_shuangpin_english_tail(scope, &lists);
-        }
         if lists.iter().any(|words| words.get(scope).is_some()) {
             return None;
         }
-        let full = (!shuangpin).then(|| parser::segment(scope).ok()).flatten();
-        let unlikely = correction::unlikely_pinyin(full.as_ref().and_then(|s| s.first()), "")
-            || correction::trailing_single_letter(full.as_ref().and_then(|s| s.first()));
-        if !shuangpin && (full.is_none() || unlikely) {
-            // 拼写纠错能把整段纠成通顺的拼音（`shiide` → 是的，`yingagi` → 应该）：那是敲错，不是英文
+        // 整段能读成通顺拼音时（`shiide`→是的 靠纠错、`yingagi`→应该）：是敲错不是英文，不出英文尾段。
+        // 双拼 `active_correction` 恒为 None、`decode().segmentation()` 有，自然不进这里。
+        let full = self.decode(scope).and_then(|d| d.segmentation());
+        let unlikely = correction::unlikely_pinyin(full.as_ref(), "")
+            || correction::trailing_single_letter(full.as_ref());
+        if full.is_none() || unlikely {
             if self.active_correction(scope).is_some() {
                 return None;
             }
@@ -82,7 +79,7 @@ impl Engine {
             }
         }
         let personal = self.learner.user_english();
-        // 全拼：英文词可在句首 / 句中 / 句末，前后拼音段都要能完整切分（空段算合法）。
+        // 英文词可在句首 / 句中 / 句末，前后拼音段都要能读成完整音节（空段算合法）。
         // 取最长的英文词（`wodedatabase` 取 database 不取 base）；同长取靠后的（句末优先，与原行为一致）。
         let min_word = MIN_ENGLISH_TAIL_LETTERS;
         let max_start = scope.len().saturating_sub(min_word);
@@ -91,9 +88,15 @@ impl Engine {
             if !scope.is_char_boundary(start) {
                 continue;
             }
-            // 前拼音段要能完整切分（空段算合法）
-            if start > 0 && !parser::is_fully_segmentable(&scope[..start]) {
-                continue;
+            // 前拼音段：空（句首英文词）或全部解成完整音节、没有解不动的尾巴。
+            // 末尾落单的声母键（双拼 `f` 可能要打 `fa`）不算合法头段结尾——会误切 `fwihhc` 这种。
+            if start > 0 {
+                let Some(prefix) = self.decode(&scope[..start]) else {
+                    continue;
+                };
+                if !prefix.is_complete() || prefix.segmentation().is_none() {
+                    continue;
+                }
             }
             for end in ((start + min_word)..=scope.len()).rev() {
                 if !scope.is_char_boundary(end) {
@@ -121,88 +124,11 @@ impl Engine {
                 {
                     continue;
                 }
-                // 后拼音段要能完整切分（空段算合法）
-                if end < scope.len() && !parser::is_fully_segmentable(&scope[end..]) {
-                    continue;
-                }
-                let tail = EnglishTail {
-                    head_len: start,
-                    word_end: end,
-                    // 用户输入全小写时用词表原形（`id` → ID、`github` → GitHub）；
-                    // 用户输入含大写时尊重用户输入（`Rust` → Rust）。
-                    word: if typed.bytes().all(|b| b.is_ascii_lowercase()) {
-                        word.to_owned()
-                    } else {
-                        typed.to_owned()
-                    },
-                    // 英文词本身也能切成完整拼音时（`database` → da ta ba se），两种读法要比分。
-                    competes: full.is_some(),
-                    log_prob: english_log_prob(best_frequency(&lists, &typed_lower)),
-                };
-                if best.as_ref().is_none_or(|b| end - start > b.word_end - b.head_len) {
-                    best = Some(tail);
-                }
-                break;
-            }
-        }
-        best
-    }
-
-    /// 在双拼原始键串中寻找一个英文词。英文词可以位于句中，前后都必须是完整双拼音节。
-    fn split_shuangpin_english_tail(
-        &self,
-        scope: &str,
-        lists: &[&qingjian_dictionary::WordList],
-    ) -> Option<EnglishTail> {
-        if lists.iter().any(|words| words.get(scope).is_some()) {
-            return None;
-        }
-        let personal = self.learner.user_english();
-        let min_word = MIN_SHUANGPIN_ENGLISH_TAIL_LETTERS;
-        let max_start = scope.len().saturating_sub(min_word);
-        let mut best: Option<EnglishTail> = None;
-        for start in 0..=max_start {
-            if !scope.is_char_boundary(start) {
-                continue;
-            }
-            // 英文词前的拼音头段：空（句首英文词）或全部解成完整音节、没有解不动的尾巴。
-            // 末尾落单的声母键（`f` 可能要打 `fa`）不算合法头段结尾——会误切 `fwihhc` 这种。
-            if start > 0 {
-                let Some(prefix) = self.decode(&scope[..start]) else {
-                    continue;
-                };
-                if !prefix.is_complete() || prefix.segmentation().is_none() {
-                    continue;
-                }
-            }
-            for end in ((start + min_word)..=scope.len()).rev() {
-                if !scope.is_char_boundary(end) {
-                    continue;
-                }
-                let typed = &scope[start..end];
-                let typed_lower = typed.to_ascii_lowercase();
-                let Some(words) = lists.iter().find(|words| words.get(&typed_lower).is_some())
-                else {
-                    continue;
-                };
-                let Some(word) = words.get(&typed_lower) else {
-                    continue;
-                };
-                let acronym = word.bytes().any(|b| b.is_ascii_uppercase());
-                let known = personal.is_some_and(|known| known.get(&typed_lower).is_some());
-                if end - start < min_word && !acronym && !known {
-                    continue;
-                }
-                if parser::is_fully_segmentable(&typed_lower)
-                    && end - start < MIN_PINYIN_LIKE_TAIL_LETTERS
-                {
-                    continue;
-                }
                 if end < scope.len() {
                     let Some(suffix) = self.decode(&scope[end..]) else {
                         continue;
                     };
-                    // 后段要能解出音节。末尾落单的声母键（`b` 可能还要打 `ba`）是正常的中间状态，
+                    // 后段要能解出音节。末尾落单的声母键（双拼 `b` 可能还要打 `ba`）是正常的中间状态，
                     // 不该因此拒绝英文词切分——只要解出了音节就接受。
                     if suffix.segmentation().is_none()
                         || (!suffix.is_complete() && !suffix.pending_initial())
@@ -220,12 +146,11 @@ impl Engine {
                     } else {
                         typed.to_owned()
                     },
-                    // 尾段也能解码成完整双拼时（`meds` → me+ds → 么东，与英文 meds 竞争），
-                    // 要和拼音整句比分，不能直接采用英文读法。
+                    // 英文词本身也能读成完整拼音时（`database` → da ta ba se、双拼 `meds` → me+ds），
+                    // 两种读法要比分，见 [`Engine::mixed_beats_plain`]。
                     competes: self.decode(typed).is_some_and(|d| d.is_complete()),
-                    log_prob: english_log_prob(best_frequency(lists, &typed_lower)),
+                    log_prob: english_log_prob(best_frequency(&lists, &typed_lower)),
                 };
-                // 取最长的英文词（`wodedatabase` 取 database 不取 DE）；同长取靠后的（句末优先）。
                 if best.as_ref().is_none_or(|b| end - start > b.word_end - b.head_len) {
                     best = Some(tail);
                 }
@@ -240,13 +165,9 @@ impl Engine {
     /// `wodedatabase`：我的 + database 赢过 我的大塔巴瑟；`womenqubeijing`：我们去北京 赢过 我们去 + Beijing；
     /// `taida`：太大 赢过 他 + Ida；`huoz`：或者 赢过 和 + Oz。
     pub(super) fn mixed_beats_plain(&self, scope: &str, tail: &EnglishTail) -> bool {
-        // 双拼下 scope 是原始键串，parser::segment 切不动；先 decode 成全拼再切。
+        // scope 是原始键串：双拼先 decode 成全拼再切，全拼 decode 返回自身。
         let decode = |text: &str| -> Option<String> {
-            if self.shuangpin.is_some() {
-                self.decode(text).map(|d| d.pinyin().to_owned())
-            } else {
-                Some(text.to_owned())
-            }
+            self.decode(text).map(|d| d.pinyin().to_owned())
         };
         let convert = |text: &str, whole: bool| {
             let pinyin = decode(text)?;
@@ -291,58 +212,11 @@ impl Engine {
         typos: bool,
     ) -> Option<Candidate> {
         let keys = self.composition.scope();
-        if self.shuangpin.is_none() {
-            // 全拼：前拼音段 + 英文词 [+ 后拼音段]。后拼音段也按完整切分转换。
-            let head_pinyin = &keys[..tail.head_len];
-            let suffix_pinyin = &keys[tail.word_end..];
-            let head_seg = if head_pinyin.is_empty() {
-                None
-            } else {
-                parser::segment(head_pinyin).ok()?.into_iter().next()
-            };
-            let suffix_seg = if suffix_pinyin.is_empty() {
-                None
-            } else {
-                parser::segment(suffix_pinyin).ok()?.into_iter().next()
-            };
-            let head_text = if let Some(seg) = &head_seg {
-                let conv = self.convert_sentence(&seg.patterns(), typos)?;
-                if conv.has_placeholder() {
-                    return None;
-                }
-                conv.text
-            } else {
-                String::new()
-            };
-            let suffix_text = if let Some(seg) = &suffix_seg {
-                let conv = self.convert_sentence(&seg.patterns(), typos)?;
-                if conv.has_placeholder() {
-                    return None;
-                }
-                conv.text
-            } else {
-                String::new()
-            };
-            let mut syllables = Vec::new();
-            if let Some(seg) = &head_seg {
-                syllables.extend(seg.syllables.iter().map(|s| s.text.clone()));
-            }
-            syllables.push(keys[tail.head_len..tail.word_end].to_owned());
-            if let Some(seg) = &suffix_seg {
-                syllables.extend(seg.syllables.iter().map(|s| s.text.clone()));
-            }
-            return Some(Candidate {
-                text: format!("{}{}{}", head_text, tail.word, suffix_text),
-                kind: CandidateKind::Sentence,
-                syllables,
-                reading: None,
-                translation: None,
-            });
-        }
-        // 双拼：前拼音段 + 英文词 [+ 后拼音段]，各段按双拼解码后的全拼分别转换。
+        // 前拼音段 + 英文词 [+ 后拼音段]，各段按解码后的全拼分别转换。
+        // 全拼 `decode` 返回自身、`segmentation()` 返回第一条切分；双拼按方案解码。
         let prefix = self.decode(&keys[..tail.head_len]);
         let suffix = self.decode(&keys[tail.word_end..]);
-        // 头段为空（句首英文词）或完整双拼音节；后段同理。
+        // 头段为空（句首英文词）或完整音节；后段同理。
         let head_text = if tail.head_len == 0 {
             String::new()
         } else {
