@@ -4,7 +4,7 @@ use super::*;
 
 #[test]
 fn erasing_the_last_commit_and_choosing_another_word_retracts_its_learning() {
-    let mut engine = engine().with_learner(Box::new(CountingLearner(HashMap::new())));
+    let mut engine = engine().with_learner(Box::new(CountingLearner::new()));
     let pick = |engine: &mut Engine, input: &str, text: &str| {
         engine.set_input(input);
         let candidate = engine
@@ -47,7 +47,7 @@ fn erasing_the_last_commit_and_choosing_another_word_retracts_its_learning() {
 
 #[test]
 fn erasing_several_commits_and_retyping_retracts_the_wrong_one() {
-    let mut engine = engine().with_learner(Box::new(CountingLearner(HashMap::new())));
+    let mut engine = engine().with_learner(Box::new(CountingLearner::new()));
     let pick = |engine: &mut Engine, input: &str, text: &str| {
         engine.set_input(input);
         let candidate = engine
@@ -142,7 +142,7 @@ fn splitting_a_buffer_into_a_word_and_a_sentence_forms_the_whole_phrase() {
 
 #[test]
 fn commit_feeds_learner_and_reorders() {
-    let mut engine = engine().with_learner(Box::new(CountingLearner(HashMap::new())));
+    let mut engine = engine().with_learner(Box::new(CountingLearner::new()));
     engine.set_input("kaif");
     let query = engine.query().unwrap();
     let kaifa = query
@@ -161,7 +161,7 @@ fn commit_feeds_learner_and_reorders() {
     // 换个输入串（`kai'fa`，分隔符不计）也算同一串；`kaifang` 不算
     engine.set_input("kai'f");
     assert_eq!(engine.query().unwrap().candidates.items[0].text, "开发");
-    engine.set_input("kaifazhe");
+    engine.set_input("kaifaxian");
     let items = engine.query().unwrap().candidates.items;
     let kaifa = items.iter().find(|c| c.text == "开发").unwrap().clone();
     // 从长输入里选前缀词：按消耗掉的那段（`kaifa`）记
@@ -444,7 +444,7 @@ fn committing_the_translation_learns_the_word_and_returns_the_gloss() {
     }
     let mut engine = engine()
         .with_translator(Box::new(KaifaTranslator))
-        .with_learner(Box::new(CountingLearner(HashMap::new())));
+        .with_learner(Box::new(CountingLearner::new()));
     engine.set_input("kaifazhe");
     let mut query = engine.query().unwrap();
     engine.annotate(&mut query.candidates);
@@ -663,4 +663,46 @@ fn input_log_records_the_session_and_page_turns() {
         panic!("expected a commit");
     };
     assert_eq!(commit.pages, 2);
+}
+
+
+/// 选 emoji 也记 choice：下次同样的输入 emoji 排第一。
+#[test]
+fn choosing_emoji_records_choice() {
+    let words = WordList::parse("smile
+").unwrap();
+    let table = EmojiTable::parse("smile	😀
+").unwrap();
+    let mut engine = engine()
+        .with_learner(Box::new(CountingLearner::new()))
+        .with_english(words)
+        .with_emoji(table);
+    engine.set_input("smile");
+    let query = engine.query().unwrap();
+    let emoji = query
+        .candidates
+        .items
+        .into_iter()
+        .find(|c| c.kind == CandidateKind::Emoji)
+        .unwrap();
+    let text = emoji.text.clone();
+    engine.commit(&emoji);
+    assert!(engine.learner().is_last_choice("smile", &text));
+}
+
+/// 选整句也记 choice：下次同样的输入整句排第一。
+#[test]
+fn choosing_sentence_records_choice() {
+    let mut engine = engine().with_learner(Box::new(CountingLearner::new()));
+    engine.set_input("kaifaxian");
+    let query = engine.query().unwrap();
+    let sentence = query
+        .candidates
+        .items
+        .into_iter()
+        .find(|c| c.kind == CandidateKind::Sentence)
+        .unwrap();
+    let text = sentence.text.clone();
+    engine.commit(&sentence);
+    assert!(engine.learner().is_last_choice("kaifaxian", &text));
 }

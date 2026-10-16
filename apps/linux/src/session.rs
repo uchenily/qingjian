@@ -17,6 +17,7 @@ pub const KIND_ENGLISH: u8 = 2;
 pub const KIND_SHORTCUT: u8 = 4;
 pub const KIND_EMOJI: u8 = 5;
 pub const KIND_CUSTOM: u8 = 6;
+pub const KIND_GENERATED: u8 = 7;
 
 /// 当前输入会话的 UI 状态。
 #[derive(Debug, Default)]
@@ -219,5 +220,6 @@ pub fn kind_of(kind: qingjian_core::CandidateKind) -> u8 {
         CandidateKind::Shortcut => KIND_SHORTCUT,
         CandidateKind::Emoji => KIND_EMOJI,
         CandidateKind::Custom(_) => KIND_CUSTOM,
+        CandidateKind::Generated => KIND_GENERATED,
     }
 }

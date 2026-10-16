@@ -98,8 +98,62 @@ impl CharScorer {
         self.metadata.as_ref()
     }
 
+    /// 加载好的模型本体：逐字生成一类的实验直接用它。
+    pub fn model(&self) -> &CharLm {
+        &self.model
+    }
+
     pub fn vocab(&self) -> &Vocab {
         &self.vocab
+    }
+
+    /// 教师强制计算 `log P(候选 | 完整拼音)`，只累加候选字符，不计 EOS。
+    /// 与字级重排使用相同的求和口径；超长输入报错，不截断用户拼音。
+    pub fn score_p2c(&self, keys: &str, texts: &[&str]) -> Result<Vec<f64>, NeuralError> {
+        let sep = self.vocab.sep().ok_or(NeuralError::Corrupt(
+            "Hanzhang Tongbian model requires a <sep> token in its vocabulary",
+        ))?;
+        if texts.is_empty() {
+            return Ok(Vec::new());
+        }
+        let head: Vec<u32> = std::iter::once(EOS)
+            .chain(self.vocab.encode(keys))
+            .collect();
+        let tails: Vec<Vec<u32>> = texts.iter().map(|text| self.vocab.encode(text)).collect();
+        let width = tails.iter().map(Vec::len).max().unwrap_or(0).max(1);
+        if head.len() + width > self.model.config().context {
+            return Err(NeuralError::Corrupt("P2C scoring exceeds model context"));
+        }
+        let batch = tails.len();
+        let mut flat = vec![0u32; batch * width];
+        let mut targets = vec![0u32; batch * width];
+        for (row, tail) in tails.iter().enumerate() {
+            flat[row * width] = sep;
+            if !tail.is_empty() {
+                flat[row * width + 1..row * width + tail.len()]
+                    .copy_from_slice(&tail[..tail.len() - 1]);
+                targets[row * width..row * width + tail.len()].copy_from_slice(tail);
+            }
+        }
+        let idx = Tensor::from_vec(flat, (batch, width), self.model.device())?;
+        let targets = Tensor::from_vec(targets, (batch, width, 1), self.model.device())?;
+        let mut guard = self
+            .cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if guard.as_ref().is_none_or(|(ids, _)| ids != &head) {
+            let cache = self.model.prefix_cache(&head)?;
+            *guard = Some((head, cache));
+        }
+        let (_, cache) = guard.as_ref().expect("filled above");
+        let lp = self.model.log_probs_after(cache, &idx)?;
+        drop(guard);
+        let picked = lp.gather(&targets, 2)?.squeeze(2)?.to_vec2::<f32>()?;
+        Ok(tails
+            .iter()
+            .zip(picked)
+            .map(|(tail, row)| row[..tail.len()].iter().map(|&v| f64::from(v)).sum())
+            .collect())
     }
 
     /// 每个候选接在 `context` 后面的 `log P(候选 | 前文)`，按字累加。

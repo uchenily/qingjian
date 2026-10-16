@@ -12,7 +12,7 @@ fn typo_edges_in_the_lattice_correct_legal_but_unlikely_pinyin() {
     )
     .unwrap();
     let mut engine =
-        Engine::new(dictionary).with_learner(Box::new(CountingLearner(HashMap::new())));
+        Engine::new(dictionary).with_learner(Box::new(CountingLearner::new()));
     engine.set_input("meiganxi");
     let query = engine.query().unwrap();
     assert!(query.correction.is_none());
@@ -94,7 +94,7 @@ fn fuzzy_hits_consume_the_typed_syllables() {
     let dictionary =
         Dictionary::parse("知识\tzhi shi\t500000\n只是\tzhi shi\t600000\n资\tzi\t1000\n").unwrap();
     let mut engine =
-        Engine::new(dictionary).with_learner(Box::new(CountingLearner(HashMap::new())));
+        Engine::new(dictionary).with_learner(Box::new(CountingLearner::new()));
     engine.set_fuzzy(FuzzyRules {
         z_zh: true,
         ..FuzzyRules::default()
@@ -121,7 +121,7 @@ fn accepted_whole_string_correction_feeds_the_typo_table() {
         )
         .unwrap();
     let mut engine =
-        Engine::new(dictionary).with_learner(Box::new(CountingLearner(HashMap::new())));
+        Engine::new(dictionary).with_learner(Box::new(CountingLearner::new()));
     engine.set_input("nihooma");
     let query = engine.query().unwrap();
     assert_eq!(query.correction.as_ref().unwrap().corrected, "nihaoma");
@@ -151,7 +151,7 @@ fn spelling_correction_fixes_one_edit_and_learns_from_enter() {
         .unwrap();
     let mut engine = Engine::new(dictionary)
         .with_english(WordList::parse("hello\n").unwrap())
-        .with_learner(Box::new(CountingLearner(HashMap::new())));
+        .with_learner(Box::new(CountingLearner::new()));
     // 换错一个字母：nihooma → nihaoma，候选来自纠正后的拼音，拼音行画出被改掉的 o
     engine.set_input("nihooma");
     let query = engine.query().unwrap();

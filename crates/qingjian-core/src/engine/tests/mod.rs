@@ -6,7 +6,6 @@ mod emoji;
 mod english;
 mod learning;
 mod lookup;
-mod privacy;
 mod shuangpin;
 
 use std::collections::HashMap;
@@ -48,7 +47,13 @@ fn looks_like_english_word_in(engine: &Engine) -> bool {
     looks_like_english_word(raw, false) && engine.decode(raw).is_none_or(|d| !d.is_complete())
 }
 
-struct CountingLearner(HashMap<String, u32>);
+struct CountingLearner(HashMap<String, u32>, std::cell::RefCell<Option<(String, String)>>);
+
+impl CountingLearner {
+    fn new() -> Self {
+        Self(HashMap::new(), std::cell::RefCell::new(None))
+    }
+}
 
 impl Learner for CountingLearner {
     fn record(&mut self, candidate: &Candidate) {
@@ -61,6 +66,7 @@ impl Learner for CountingLearner {
 
     fn record_choice(&mut self, input: &str, text: &str) {
         *self.0.entry(format!("{input}\t{text}")).or_default() += 1;
+        *self.1.borrow_mut() = Some((input.to_owned(), text.to_owned()));
     }
 
     fn choice_weight(&self, input: &str, text: &str) -> u32 {
@@ -68,6 +74,13 @@ impl Learner for CountingLearner {
             .get(&format!("{input}\t{text}"))
             .copied()
             .unwrap_or(0)
+    }
+
+    fn is_last_choice(&self, input: &str, text: &str) -> bool {
+        self.1
+            .borrow()
+            .as_ref()
+            .is_some_and(|(i, t)| i == input && t == text)
     }
 
     fn record_raw(&mut self, input: &str) {

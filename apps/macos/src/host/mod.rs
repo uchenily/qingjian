@@ -121,7 +121,7 @@ pub struct Host {
     /// 正在后台加载的模型；加载完接到 Engine 上就清掉。
     model_loader: Option<
         std::sync::mpsc::Receiver<
-            Result<qingjian_neural::CharScorer, qingjian_neural::NeuralError>,
+            Result<Box<dyn qingjian_core::sentence::SentenceScorer>, qingjian_neural::NeuralError>,
         >,
     >,
 

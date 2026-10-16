@@ -54,17 +54,6 @@ pub enum ClientMessage {
         text: String,
     },
 
-    /// 输入框私密与否变了（DLL 起组句时按输入范围判：`IS_PRIVATE` / 密码 / PIN 类算私密，浏览器无痕窗口就是它）。
-    /// Server 让 Engine 进 / 出私密：不学习、不记输入日志；前文 DLL 侧就不读。只在与上次报的不同时发，不回话。
-    /// 真正的密码框（`KEYBOARD_DISABLED` compartment）DLL 直接放行所有键、不组句，到不了这里。
-    Privacy {
-        /// 会话标识。
-        session: SessionId,
-
-        /// 现在是私密输入。
-        private: bool,
-    },
-
     /// 组句更新后，DLL 在编辑会话里量到组句范围的屏幕矩形，发来让 Server 把候选窗口摆到光标下方。
     /// 不等回话：候选窗口由 Server 进程自绘（搬出应用进程，才能盖过微软商店 / 任务栏搜索这些高 z-band 宿主）。
     /// 组句结束 / 失焦时 Server 按空帧与 [`Commit`](Self::Commit) 自行收窗口，不必 DLL 再发。

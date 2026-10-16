@@ -40,4 +40,11 @@ impl EngineDecoded {
             Self::Shuangpin(d) => d.is_complete(),
         }
     }
+
+    /// 末尾是不是一个落单的声母键（双拼）。
+    pub fn pending_initial(&self) -> bool {
+        match self {
+            Self::Shuangpin(d) => d.pending_initial(),
+        }
+    }
 }

@@ -247,7 +247,7 @@ impl Router {
                 .is_some_and(|candidate| {
                     matches!(
                         candidate.kind,
-                        CandidateKind::Chinese | CandidateKind::Sentence
+                        CandidateKind::Chinese | CandidateKind::Sentence | CandidateKind::Generated
                     )
                 })
         {

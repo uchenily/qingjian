@@ -80,9 +80,17 @@ impl Engine {
         // （`fwihnice` 选过 nice 53 次，但 `mixed_beats_plain` 的 wordfreq Zipf 与 bigram 量纲不一致，
         // `nice` 的 log 概率被估低，拼音 `你侧` 反而赢）。
         let head_wins = english_tail.as_ref().is_some_and(|t| {
-            !t.competes
-                || self.mixed_beats_plain(keys, t)
-                || self.learner.weight(&t.word) >= ENGLISH_TAIL_USER_WIN
+            // 英文词本身能解成完整双拼（`meds`→me+ds）：与拼音整句比分。
+            // 英文词本身解不动（`key` 3键、`docker` 6键）：看整段能否解成通顺拼音——
+            // 能解（`keyi`→`ke'yi` 可以）要比分让拼音有机会；不能解（`ysdocker...` 的 `cker`）英文词直接赢。
+            // 用户选过英文词的加分在 `mixed_beats_plain` 里算（`english_bonus` + 不扣切换代价），
+            // 不在这里短路——否则 `keyijbig` 选过 `key` 后永远英文切法，哪怕「可以进城」更通顺。
+            if t.competes {
+                self.mixed_beats_plain(keys, t)
+            } else {
+                self.decode(keys).is_none_or(|d| !d.is_complete())
+                    || self.mixed_beats_plain(keys, t)
+            }
         });
         // `head_wins` 时拼音候选与显示按拼音段算（词级候选是拼音段的词，`marked_text` 是拼音段 + 英文词）；
         // 句末英文词按前段，句首英文词（`head_len=0`）按后段。否则按完整输入切。
@@ -233,7 +241,13 @@ impl Engine {
                 .map_or(item.coverage, |c| c.edit.to_original(item.coverage));
             let choice = letters
                 .get(..covered)
-                .map_or(0, |input| self.learner.choice_weight(input, hit.text));
+                .map_or(0, |input| {
+                    if self.learner.is_last_choice(input, hit.text) {
+                        u32::MAX
+                    } else {
+                        self.learner.choice_weight(input, hit.text)
+                    }
+                });
             let log_prob = sentence::transition_log_prob(
                 &*self.language_model,
                 self.personal(),
@@ -272,7 +286,37 @@ impl Engine {
             .as_ref()
             .filter(|_| head_wins)
             .map_or(tail, |t| &keys[t.head_len..]);
-        let typed_display = decoded.as_ref().map(|d| d.marked());
+        // 双拼 + 英文尾段且英文切法赢时，整段 decode 会把英文词拆坏（`ysdocker...` → `yong'duo'cker...`），
+        // 按英文尾段的拆分分别 decode 头段、后段，英文词原样夹中间：`yong'docker'bu'shu'hen'fang'bian`。
+        // 英文切法没赢（`keyi`→`ke'yi` 可以更通顺）时走整段 decode，preedit 是 `ke'yi`。
+        // 全拼下 `typed_display` 本就是 `None`（走 `join_marked`），不动。
+        let typed_display = if self.shuangpin.is_some() {
+            if let Some(t) = english_tail.filter(|_| head_wins) {
+                let head = self.decode(&keys[..t.head_len]).map(|d| d.pinyin().to_owned()).unwrap_or_default();
+                let suffix = self.decode(&keys[t.word_end..]).map(|d| d.pinyin().to_owned()).unwrap_or_default();
+                let mut s = String::new();
+                if !head.is_empty() {
+                    s.push_str(&head);
+                }
+                if !t.word.is_empty() {
+                    if !s.is_empty() {
+                        s.push('\'');
+                    }
+                    s.push_str(&t.word);
+                }
+                if !suffix.is_empty() {
+                    if !s.is_empty() {
+                        s.push('\'');
+                    }
+                    s.push_str(&suffix);
+                }
+                Some(s)
+            } else {
+                decoded.as_ref().map(|d| d.marked())
+            }
+        } else {
+            decoded.as_ref().map(|d| d.marked())
+        };
         Ok(Query {
             segmentations,
             candidates: CandidateList { items },
@@ -399,21 +443,142 @@ impl Engine {
         } else {
             None
         };
+        // 让模型直接按按键生成几条候选：词图的 Viterbi top-k 可能根本不含正确读法
+        // （`bushuhenfangbian` 的前 6 条全是「不是很X」，没有「部署很方便」），生成路径不受词图限制。
+        // 双拼下先把键串解成全拼再喂模型：模型训练时见的是全拼字母。双拼+英文混输时按 `split_english_tail`
+        // 的拆分把头段、后段分别解成全拼，英文词原样夹在中间——这正是模型见过的形态。
+        let gen_keys: Option<String> = if keys.len() >= 6 {
+            if self.shuangpin.is_some() {
+                // 双拼：头段全拼 + 英文词 + 后段全拼（英文段不解码，原样保留）
+                // 只在英文切法赢（`head_wins`）时按英文尾段拆分；拼音更通顺时整段解码成全拼
+                let tail = english_tail.filter(|_| head_wins);
+                // 无英文尾段时整段当头段解码成全拼；有尾段时头段是英文词之前的部分
+                let head_len = tail.map(|t| t.head_len).unwrap_or(keys.len());
+                let head = &keys[..head_len];
+                let word_end = tail.map(|t| t.word_end).unwrap_or(keys.len());
+                let word = tail.map(|t| t.word.as_str()).unwrap_or("");
+                let suffix = &keys[word_end..];
+                let head_pinyin = if head.is_empty() {
+                    String::new()
+                } else {
+                    self.decode(head).map(|d| d.pinyin().replace(['\'', '\"'], "")).unwrap_or_else(|| head.to_owned())
+                };
+                let suffix_pinyin = if suffix.is_empty() {
+                    String::new()
+                } else {
+                    self.decode(suffix).map(|d| d.pinyin().replace(['\'', '\"'], "")).unwrap_or_else(|| suffix.to_owned())
+                };
+                let gk = format!("{head_pinyin}{word}{suffix_pinyin}");
+                if gk.bytes().all(|b| b.is_ascii_alphabetic()) {
+                    Some(gk)
+                } else {
+                    None
+                }
+            } else if keys.bytes().all(|b| b.is_ascii_lowercase()) {
+                Some(keys.to_owned())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let mut generated: Vec<Candidate> = if let Some(gk) = &gen_keys {
+            let generated_texts = self.generated_sentences(gk);
+            generated_texts.into_iter()
+                .filter(|t| t.chars().any(sentence::is_han))
+                .map(|text| Candidate {
+                    text,
+                    kind: CandidateKind::Generated,
+                    syllables: Vec::new(),
+                    reading: None,
+                    translation: None,
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        // 最近选过的生成候选排最前：`record_choice` 记的输入是全拼（`whole_scope` 双拼下用 `decoded.pinyin()`），
+        // 和 `gen_keys` 一致，直接查。
+        if let Some(gk) = gen_keys.as_deref()
+            && let Some(idx) = generated.iter().position(|c| self.learner.is_last_choice(gk, &c.text))
+            && idx != 0
+        {
+            generated.swap(0, idx);
+        }
         match (mixed, plain) {
             (Some(mixed), Some(plain)) => {
                 // 英文切法更通顺：排第一，拼音整句排第二。
+                let mixed_text = mixed.text.clone();
+                let plain_text = plain.text.clone();
                 items.insert(0, mixed);
                 let position = items.len().min(1);
                 items.insert(position, plain);
+                // 生成候选的第一条排混输前面（模型可能给出更通顺的整句，如 用docker部署很方便），
+                // 其余排拼音整句后面。
+                if !generated.is_empty() {
+                    let mut iter = generated.into_iter();
+                    let first = iter.next().unwrap();
+                    if first.text != mixed_text {
+                        items.insert(0, first);
+                    }
+                    for cand in iter.rev() {
+                        if cand.text != plain_text {
+                            items.insert(position + 1, cand);
+                        }
+                    }
+                }
             }
             (Some(mixed), None) => {
+                let mixed_text = mixed.text.clone();
                 items.insert(0, mixed);
+                if !generated.is_empty() {
+                    let mut iter = generated.into_iter();
+                    let first = iter.next().unwrap();
+                    if first.text != mixed_text {
+                        items.insert(0, first);
+                    }
+                    for cand in iter.rev() {
+                        items.insert(1, cand);
+                    }
+                }
             }
             (None, Some(plain)) => {
                 let position = leading_english(items);
+                let plain_text = plain.text.clone();
                 items.insert(position, plain);
+                // 生成候选的第一条（模型最看好的）排在词图整句前面；其余排后面。
+                // 词图的 Viterbi top-k 可能不含正确读法（`bushuhenfangbian` 全是「不是很X」），
+                // 生成路径不受词图限制，给它一个超过词图整句的机会。
+                if !generated.is_empty() {
+                    let mut iter = generated.into_iter();
+                    let first = iter.next().unwrap();
+                    if first.text != plain_text {
+                        items.insert(position, first);
+                    }
+                    for cand in iter.rev() {
+                        if cand.text != plain_text {
+                            items.insert(position + 1, cand);
+                        }
+                    }
+                }
             }
-            (None, None) => {}
+            (None, None) => {
+                let position = leading_english(items);
+                for cand in generated.into_iter().rev() {
+                    items.insert(position, cand);
+                }
+            }
+        }
+        // 最近选过的候选总排第一：不管是词级、整句还是生成候选，`record_choice` 记的输入是全拼
+        // （`choice_key(decoded.pinyin())`），这里同样用解码后的全拼查。
+        if let Some(decoded) = self.decode(keys)
+            && let Some(idx) = items
+                .iter()
+                .position(|c| self.learner.is_last_choice(&choice_key(decoded.pinyin(), decoded.pinyin().len()), &c.text))
+            && idx != 0
+        {
+            let cand = items.remove(idx);
+            items.insert(0, cand);
         }
     }
 
@@ -537,7 +702,9 @@ impl Engine {
         if paths.len() > 1 {
             let floor = paths[0].score - self.neural_margin;
             paths.retain(|p| p.score >= floor);
-            self.rescore_paths(&mut paths);
+            // 条件是这批路径共同解释的那段按键（音节文本），不是整个作用域
+            let keys: String = patterns.iter().map(|p| p.text).collect();
+            self.rescore_paths(&mut paths, &keys);
         }
         paths.into_iter().next()
     }

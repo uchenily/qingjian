@@ -4,11 +4,11 @@ use super::*;
 
 mod forgotten;
 mod learner;
-mod muted;
+
 
 pub use forgotten::Forgotten;
 pub use learner::{Learner, NoLearner};
-pub(super) use muted::MutedLearner;
+
 
 impl Engine {
     /// 当前学习语言的词汇汇总（偏好设置「统计」页）。
@@ -134,7 +134,8 @@ impl Engine {
             CandidateKind::Sentence
             | CandidateKind::Shortcut
             | CandidateKind::Custom(_)
-            | CandidateKind::Emoji => Forgotten::default(),
+            | CandidateKind::Emoji
+            | CandidateKind::Generated => Forgotten::default(),
         };
         if !forgotten.is_nothing() {
             self.forget_span_cache();

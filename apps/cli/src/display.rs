@@ -27,20 +27,8 @@ pub fn show(engine: &mut Engine, input: &str, limit: usize) -> Option<Query> {
     };
     let report = engine.annotate(&mut query.candidates);
 
-    let segmentations: Vec<String> = query
-        .segmentations
-        .iter()
-        .map(ToString::to_string)
-        .collect();
-    if query.tail.is_empty() {
-        println!("  切分: {}", segmentations.join(" | "));
-    } else {
-        println!(
-            "  切分: {}  未切分尾部: {}",
-            segmentations.join(" | "),
-            query.tail
-        );
-    }
+    // 显示产品端同款的 preedit（marked_text），而不是词图内部的 segmentations + tail
+    println!("  preedit: {}", query.marked_text());
     if let Some(correction) = &query.correction {
         println!(
             "  纠正: {} → {}",
@@ -173,6 +161,7 @@ fn format_candidate(candidate: &Candidate, width: usize, rescored: bool) -> Stri
         qingjian_core::CandidateKind::Shortcut => "[v] ",
         qingjian_core::CandidateKind::Custom(_) => "[custom] ",
         qingjian_core::CandidateKind::Sentence => "[句] ",
+        qingjian_core::CandidateKind::Generated => "[生] ",
         qingjian_core::CandidateKind::Emoji => "",
     };
     let prefix = if rescored { "✦ " } else { "" };

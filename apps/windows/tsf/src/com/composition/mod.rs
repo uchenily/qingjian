@@ -57,8 +57,7 @@ pub(crate) fn apply(
         let starting = !shared.has_composition();
         let input = starting.then(|| input_context(context, ec));
         update_preedit(shared, context, ec, preedit)?;
-        if let Some(InputContext { private, before }) = input {
-            report_privacy(engine, private);
+        if let Some(InputContext { before, .. }) = input {
             if let Some(before) = before {
                 report_surrounding(engine, before);
             }
@@ -67,17 +66,6 @@ pub(crate) fn apply(
     report_caret(shared, engine, context, ec);
     Ok(())
 }
-
-/// 告诉 Server 输入框私密与否（客户端只在变了时真发）；引擎正被别处借着（罕见）就算了，下段组句再报。
-fn report_privacy(engine: &SharedClient, private: bool) {
-    if let Ok(mut guard) = engine.try_borrow_mut()
-        && let Some(client) = guard.as_mut()
-        && let Err(error) = client.set_private(private)
-    {
-        super::log::log(&format!("报私密状态失败: {error}"));
-    }
-}
-
 /// 把光标前文送给 Server；引擎正被别处借着（罕见）就算了，Server 退回会话历史。
 fn report_surrounding(engine: &SharedClient, before: String) {
     let chars = before.chars().count();

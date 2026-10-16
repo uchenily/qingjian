@@ -21,10 +21,15 @@ pub(crate) use self::state::RescoreState;
 use super::Router;
 use super::composed::Composed;
 
-/// 找模型（`.qjm` 单文件，或开发时的三件套目录）：用户目录 `model/` 优先（用户自己的模型），否则随包 `data/model/`；都没有为 `None`。
+/// 找模型：通变优先，知微回退。用户目录优先，否则随包。都没有为 `None`。
 pub fn find_model(user_dir: Option<&Path>, bundled_root: &Path) -> Option<PathBuf> {
     let candidates = [
+        user_dir.map(|dir| dir.join("models/hanzhang-tongbian")),
+        user_dir.map(|dir| dir.join("model-p2c")),
+        Some(bundled_root.join("data/models/hanzhang-tongbian")),
+        user_dir.map(|dir| dir.join("models/hanzhang-zhiwei")),
         user_dir.map(|dir| dir.join("model")),
+        Some(bundled_root.join("data/models/hanzhang-zhiwei")),
         Some(bundled_root.join("data/model")),
     ];
     candidates
@@ -88,10 +93,9 @@ impl Router {
         match loader.poll() {
             Loaded::Pending => {}
             Loaded::Done(result) => {
-                match *result {
+                match result {
                     Ok(scorer) => {
-                        self.engine
-                            .set_async_sentence_scorer(Some(Box::new(scorer)));
+                        self.engine.set_async_sentence_scorer(Some(scorer));
                         // 模型上线了：日志里补一条会话信息，之后的条目知道重排开着
                         self.engine
                             .log_session(env!("CARGO_PKG_VERSION"), "windows");

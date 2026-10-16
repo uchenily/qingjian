@@ -15,9 +15,6 @@ pub struct EngineClient<S> {
 
     /// 本会话标识，随每条消息带上。
     session: SessionId,
-
-    /// 上次报给 Server 的私密状态；`None` 是还没报过（Server 按不私密起算）。
-    private: Option<bool>,
 }
 
 impl<S: Read + Write> EngineClient<S> {
@@ -38,7 +35,6 @@ impl<S: Read + Write> EngineClient<S> {
         Ok(Self {
             stream,
             session,
-            private: None,
         })
     }
 
@@ -99,20 +95,6 @@ impl<S: Read + Write> EngineClient<S> {
             session: self.session,
             text,
         })
-    }
-
-    /// 起组句时报输入框私密与否；与上次报的相同就不发（Server 缺省按不私密）。不回话。
-    pub fn set_private(&mut self, private: bool) -> Result<(), ClientError> {
-        if self.private == Some(private) || (self.private.is_none() && !private) {
-            self.private = Some(private);
-            return Ok(());
-        }
-        self.send(&ClientMessage::Privacy {
-            session: self.session,
-            private,
-        })?;
-        self.private = Some(private);
-        Ok(())
     }
 
     /// 报组句范围的屏幕矩形，Server 据此摆候选窗口。不回话。

@@ -7,3 +7,9 @@
 /data
 .playwright-mcp/
 .pi/
+
+# 临时备份与补丁
+data.bak/
+hangzhang.patch
+qingjian-data.tar.gz
+segment/

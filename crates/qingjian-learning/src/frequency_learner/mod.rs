@@ -85,7 +85,14 @@ pub struct FrequencyLearner {
 
     /// 个人敲错表自上次保存后是否有变化。
     typos_dirty: bool,
+
+    /// 输入串 → 最近一次选的词（当前会话内，不持久化），按 LRU 顺序排。
+    /// 排序时最近选的词在同一个输入串下排第一，压过历史累计次数（`keyi` 最近选「可疑」就排「可以」前面）。
+    last_choice: Vec<(String, String)>,
 }
+
+/// `last_choice` 最多记多少个输入串的最近选择（LRU，超了淘汰最旧的）。
+const LAST_CHOICE_CAP: usize = 256;
 
 impl FrequencyLearner {
     /// 从 `词\t次数` 文本建表（只在内存里学习）。坏行跳过。
@@ -93,6 +100,15 @@ impl FrequencyLearner {
         let mut learner = Self::default();
         learner.load_counts(source);
         learner
+    }
+
+    /// 记下「这个输入串最近选了这个词」，移到末尾（最近），超容量淘汰最旧的（头部）。
+    fn touch_last_choice(&mut self, input: &str, text: &str) {
+        self.last_choice.retain(|(i, _)| i != input);
+        self.last_choice.push((input.to_owned(), text.to_owned()));
+        if self.last_choice.len() > LAST_CHOICE_CAP {
+            self.last_choice.remove(0);
+        }
     }
 
     /// 从 `词\t次数` 读选择次数，返回跳过的坏行数。

@@ -202,7 +202,11 @@ impl Engine {
                     let Some(suffix) = self.decode(&scope[end..]) else {
                         continue;
                     };
-                    if !suffix.is_complete() || suffix.segmentation().is_none() {
+                    // 后段要能解出音节。末尾落单的声母键（`b` 可能还要打 `ba`）是正常的中间状态，
+                    // 不该因此拒绝英文词切分——只要解出了音节就接受。
+                    if suffix.segmentation().is_none()
+                        || (!suffix.is_complete() && !suffix.pending_initial())
+                    {
                         continue;
                     }
                 }

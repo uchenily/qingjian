@@ -13,7 +13,6 @@ mod extras;
 mod input_log;
 mod learning;
 mod marked;
-mod privacy;
 mod query;
 mod rescoring;
 mod setup;
@@ -78,8 +77,8 @@ pub struct Engine {
     /// 与中文候选查学习语言的表分开，仍是「一个候选只显示一种辅助语言」。
     english_translator: Box<dyn Translator>,
 
-    /// 用户词频，缺省为 [`NoLearner`]；私密输入期间只读不写（[`learning::MutedLearner`]）。
-    learner: learning::MutedLearner,
+    /// 用户词频，缺省为 [`learning::NoLearner`]。
+    learner: Box<dyn learning::Learner>,
 
     /// 当前拼音缓冲区。
     composition: Composition,
@@ -136,11 +135,8 @@ pub struct Engine {
     /// 本次 commit 里记下的词转移，commit 结束时搬进 `last_commit`。
     recording: Vec<Transition>,
 
-    /// 输入日志的落盘方；缺省不记，私密输入期间一律不记（[`input_log::MutedLogger`]）。
-    logger: input_log::MutedLogger,
-
-    /// 私密输入中（见 [`Self::set_private`]）：不学、不记。
-    private: bool,
+    /// 输入日志的落盘方；缺省不记。
+    logger: Box<dyn input_log::InputLogger>,
 
     /// 输入日志条目的序号。
     log_sequence: u64,
@@ -227,10 +223,6 @@ const ENGLISH_SWITCH_PENALTY: f64 = 3.0;
 /// 英文词频的下限（Zipf）：没有词频的词按百万分之一算。
 const ENGLISH_ZIPF_FLOOR: f64 = 3.0;
 
-/// 用户选过这个英文词这么多次后，中英混输里英文切法直接排第一，不再跟拼音整句比分：
-/// `mixed_beats_plain` 的 wordfreq Zipf 与 bigram 量纲不一致，常用英文词的 log 概率会被估低。
-const ENGLISH_TAIL_USER_WIN: u32 = 2;
-
 /// emoji 只配给前几个候选，每个词最多几个、一次最多几个。
 const EMOJI_SCAN: usize = 5;
 const EMOJI_PER_WORD: usize = 2;
@@ -277,7 +269,7 @@ impl Engine {
             extra_dictionaries: Vec::new(),
             translator: Box::new(NoTranslator),
             english_translator: Box::new(NoTranslator),
-            learner: learning::MutedLearner::new(Box::new(NoLearner)),
+            learner: Box::new(NoLearner),
             composition: Composition::default(),
             english: None,
             english_mode: false,
@@ -297,8 +289,7 @@ impl Engine {
             correction_cache: std::cell::RefCell::new(None),
             span_cache: std::cell::RefCell::new(sentence::SpanCache::default()),
             recent_commits: Vec::new(),
-            logger: input_log::MutedLogger::new(Box::new(NoInputLogger)),
-            private: false,
+            logger: Box::new(NoInputLogger),
             log_sequence: 0,
             last_rescored: std::cell::Cell::new(false),
             retype_snapshot: None,

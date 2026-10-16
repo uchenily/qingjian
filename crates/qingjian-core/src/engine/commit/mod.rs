@@ -90,7 +90,6 @@ impl Engine {
             CandidateKind::Chinese => {
                 self.learner.record(candidate);
                 let (consumed, input) = self.consumed_by(candidate);
-                self.learner.record_choice(&input, &candidate.text);
                 typos = self.accepted_typos(candidate);
                 (consumed, input)
             }
@@ -100,6 +99,8 @@ impl Engine {
                 typos = self.accepted_typos(candidate);
                 self.consumed_by(candidate)
             }
+            // 模型直接生成的整句没有音节对齐，吃掉整段作用域；也因此没法拆成词记学习
+            CandidateKind::Generated => self.whole_scope(),
             // emoji 按它对应词的音节消耗拼音，不记学习
             CandidateKind::Emoji => self.consumed_by(candidate),
             // 英文词与快捷候选对应整段作用域；选中的英文词记次数并进个人英文词表，下次同样的前缀它靠前
@@ -111,6 +112,9 @@ impl Engine {
                 self.whole_scope()
             }
         };
+        // 所有候选类型都记同输入串下的选择：下次同样的拼音它排第一（最近选择优先）。
+        // Chinese 上面已 record 词频；Sentence / Emoji / Generated 不记词频（没音节对齐或不是词），只记选择。
+        self.learner.record_choice(&input, &candidate.text);
         self.apply_retraction(&input, &candidate.text);
         self.recording.clear();
         for (typed, intended) in &typos {
@@ -178,6 +182,7 @@ impl Engine {
             | CandidateKind::Shortcut
             | CandidateKind::Custom(_)
             | CandidateKind::Emoji => self.chain.reset(),
+            | CandidateKind::Generated => self.chain.reset(),
         }
         // 一次整句上屏里的几个词不算分段选，只有这段拼音经过至少两次上屏才合起来看
         let phrase = if split && !buffer_left {

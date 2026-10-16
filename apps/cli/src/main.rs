@@ -187,21 +187,29 @@ fn build_engine(args: &Args) -> Result<Engine, CliError> {
     if let Some(dir) = &args.neural {
         let started = Instant::now();
         let scorer = qingjian_neural::CharScorer::load(dir)?;
+        // 与产品端一致：字表里有 <sep> 的是 P2C 模型，按按键打分；没有的是字级模型，按前文打分
+        let p2c = scorer.vocab().sep().is_some();
+        let scorer: Box<dyn qingjian_core::sentence::SentenceScorer> = if p2c {
+            Box::new(qingjian_neural::P2cScorer(scorer))
+        } else {
+            Box::new(scorer)
+        };
         tracing::info!(
             load_ms = started.elapsed().as_millis(),
             weight = args.neural_weight.unwrap_or(qingjian_core::NEURAL_WEIGHT),
+            kind = if p2c { "P2C" } else { "字级" },
             "神经重打分已启用"
         );
         engine = if args.neural_async {
             engine.with_async_sentence_scorer(
-                Box::new(scorer),
+                scorer,
                 args.neural_weight,
                 args.neural_margin,
                 args.neural_context,
             )
         } else {
             engine.with_sentence_scorer(
-                Box::new(scorer),
+                scorer,
                 args.neural_weight,
                 args.neural_margin,
                 args.neural_context,

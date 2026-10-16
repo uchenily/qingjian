@@ -40,6 +40,7 @@ impl From<CandidateKind> for InputSource {
             CandidateKind::Shortcut => Self::Shortcut,
             CandidateKind::Custom(_) => Self::Custom,
             CandidateKind::Emoji => Self::Emoji,
+            CandidateKind::Generated => Self::Sentence,
         }
     }
 }

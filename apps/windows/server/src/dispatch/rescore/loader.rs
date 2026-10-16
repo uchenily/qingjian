@@ -3,11 +3,12 @@
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
 
-use qingjian_neural::{CharScorer, NeuralError};
+use qingjian_core::sentence::SentenceScorer;
+use qingjian_neural::{CharScorer, NeuralError, P2cScorer};
 
 /// 一次进行中的加载。
 pub(crate) struct ModelLoader {
-    result: Receiver<Result<CharScorer, NeuralError>>,
+    result: Receiver<Result<Box<dyn SentenceScorer>, NeuralError>>,
 }
 
 /// 一次加载的结局。
@@ -15,8 +16,8 @@ pub(super) enum Loaded {
     /// 还在加载。
     Pending,
 
-    /// 加载好了（或失败了，`Err`）。装箱：模型结构体比另两个变体大得多。
-    Done(Box<Result<CharScorer, NeuralError>>),
+    /// 加载好了（或失败了，`Err`）。
+    Done(Result<Box<dyn SentenceScorer>, NeuralError>),
 
     /// 加载线程没了（起不来 / panic）。
     Gone,
@@ -32,8 +33,15 @@ impl ModelLoader {
             .spawn(move || {
                 let started = std::time::Instant::now();
                 let loaded = CharScorer::load(&path).and_then(|scorer| {
-                    scorer.score("", &["的"])?;
-                    Ok(scorer)
+                    if scorer.vocab().sep().is_some() {
+                        let scorer = P2cScorer::new(scorer)
+                            .ok_or(NeuralError::Corrupt("含章·通变模型缺少 <sep> 分隔符"))?;
+                        scorer.0.score_p2c("ni", &["你"])?;
+                        Ok(Box::new(scorer) as Box<dyn SentenceScorer>)
+                    } else {
+                        scorer.score("", &["的"])?;
+                        Ok(Box::new(scorer) as Box<dyn SentenceScorer>)
+                    }
                 });
                 if loaded.is_ok() {
                     tracing::info!(
@@ -56,7 +64,7 @@ impl ModelLoader {
     /// 看一眼有没有结果，不阻塞。
     pub(super) fn poll(&self) -> Loaded {
         match self.result.try_recv() {
-            Ok(result) => Loaded::Done(Box::new(result)),
+            Ok(result) => Loaded::Done(result),
             Err(TryRecvError::Empty) => Loaded::Pending,
             Err(TryRecvError::Disconnected) => Loaded::Gone,
         }

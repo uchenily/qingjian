@@ -8,7 +8,24 @@ else
     inputs=()
 fi
 
-cargo run -p qingjian-cli --release -- \
-    --shuangpin xiaohe --fuzzy n-l,in-ing \
-    --neural data/model/model.qjm --neural-async \
-    "${inputs[@]}"
+# 本地整句模型：通变优先，知微回退，旧路径兼容
+neural=""
+for cand in \
+    data/models/hanzhang-tongbian/hanzhang-tongbian-small.qjm \
+    data/models/hanzhang-tongbian/model.qjm \
+    data/models/hanzhang-zhiwei/hanzhang-zhiwei-small.qjm \
+    data/models/hanzhang-zhiwei/model.qjm \
+    data/model/model.qjm
+do
+    if [[ -f "$cand" ]]; then
+        neural="$cand"
+        break
+    fi
+done
+
+args=(--shuangpin xiaohe --fuzzy n-l,in-ing)
+if [[ -n "$neural" ]]; then
+    args+=(--neural "$neural" --neural-async)
+fi
+
+cargo run -p qingjian-cli --release -- "${args[@]}" "${inputs[@]}"

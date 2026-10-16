@@ -108,24 +108,47 @@ pub fn user_dicts_dir() -> Option<PathBuf> {
     Some(dir)
 }
 
-/// 本地整句模型（`.qjm` 单文件，或开发时的三件套目录）：
-/// 用户目录 `model/` 里有就用它（自己训的），否则用随包的 `model/`；都没有为 `None`。
+/// 含章·通变（P2C）：用户目录优先，兼容旧 `model-p2c/`；否则随包。
+pub fn p2c_model_path() -> Option<std::path::PathBuf> {
+    if let Some(dir) = user_dir() {
+        for sub in ["models/hanzhang-tongbian", "model-p2c"] {
+            if let Some(found) = qingjian_neural::find_model(&dir.join(sub)) {
+                return Some(found);
+            }
+        }
+    }
+    let bundled = data_root().and_then(|root| {
+        for sub in ["data/models/hanzhang-tongbian", "models/hanzhang-tongbian"] {
+            let dir = root.join(sub);
+            if dir.is_dir() {
+                return Some(dir);
+            }
+        }
+        None
+    });
+    bundled.and_then(|dir| qingjian_neural::find_model(&dir))
+}
+
+/// 含章·知微（`.qjm` 单文件，或开发时的三件套目录）：
+/// 用户目录 `models/hanzhang-zhiwei/` 优先，兼容旧 `model/`；否则随包。
 /// 与 macOS 的 `paths::model_path` 对齐。
 pub fn model_path() -> Option<std::path::PathBuf> {
     if let Some(dir) = user_dir() {
-        let user = dir.join("model");
-        if let Some(found) = qingjian_neural::find_model(&user) {
-            return Some(found);
+        for sub in ["models/hanzhang-zhiwei", "model"] {
+            if let Some(found) = qingjian_neural::find_model(&dir.join(sub)) {
+                return Some(found);
+            }
         }
     }
-    // 随包：开发布局 `data/model/`，安装布局 `model/`
+    // 随包：开发布局 `data/models/hanzhang-zhiwei/`，安装布局 `models/hanzhang-zhiwei/`，兼容旧 `model/`
     let bundled = data_root().and_then(|root| {
-        let dev = root.join("data/model");
-        if dev.is_dir() {
-            return Some(dev);
+        for sub in ["data/models/hanzhang-zhiwei", "models/hanzhang-zhiwei", "data/model", "model"] {
+            let dir = root.join(sub);
+            if dir.is_dir() {
+                return Some(dir);
+            }
         }
-        let installed = root.join("model");
-        installed.is_dir().then_some(installed)
+        None
     });
     bundled.and_then(|dir| qingjian_neural::find_model(&dir))
 }

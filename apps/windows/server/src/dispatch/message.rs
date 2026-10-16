@@ -35,7 +35,6 @@ impl Router {
                     session,
                     SessionInfo {
                         app,
-                        private: false,
                     },
                 );
                 None
@@ -50,11 +49,6 @@ impl Router {
             ClientMessage::Surrounding { session, text } => {
                 tracing::trace!(?session, chars = text.chars().count(), "收到光标前文");
                 self.set_surrounding(session, text);
-                None
-            }
-            ClientMessage::Privacy { session, private } => {
-                tracing::debug!(?session, private, "输入框私密状态");
-                self.set_privacy(session, private);
                 None
             }
             ClientMessage::PositionCandidates { session, rect } => {

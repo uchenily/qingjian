@@ -294,3 +294,46 @@ fn english_words_round_trip_through_tsv_and_form_a_word_list() {
     let saved = std::fs::read_to_string(FrequencyLearner::english_path(&path)).unwrap();
     assert!(saved.contains("gist\t2"));
 }
+
+/// 最近一次选的词在同一个输入串下排第一：`keyi` 选「可以」多次后选「可疑」，
+/// `is_last_choice` 对「可疑」返回 true，排序时它排第一。
+#[test]
+fn most_recent_choice_ranks_first_within_same_input() {
+    let mut learner = FrequencyLearner::default();
+    for _ in 0..5 {
+        learner.record_choice("keyi", "可以");
+    }
+    learner.record_choice("keyi", "可疑");
+    assert!(learner.is_last_choice("keyi", "可疑"));
+    assert!(!learner.is_last_choice("keyi", "可以"));
+    // choice_weight 仍返回累计次数
+    assert_eq!(learner.choice_weight("keyi", "可以"), 5);
+    assert_eq!(learner.choice_weight("keyi", "可疑"), 1);
+}
+
+/// 撤销最近选的词后，回到按累计次数排。
+#[test]
+fn unrecord_last_choice_falls_back_to_counts() {
+    let mut learner = FrequencyLearner::default();
+    for _ in 0..5 {
+        learner.record_choice("keyi", "可以");
+    }
+    learner.record_choice("keyi", "可疑");
+    assert!(learner.is_last_choice("keyi", "可疑"));
+    learner.unrecord_choice("keyi", "可疑");
+    assert!(!learner.is_last_choice("keyi", "可疑"));
+}
+
+/// `last_choice` 有容量上限：超了淘汰最旧的（LRU）。
+#[test]
+fn last_choice_evicts_oldest_when_full() {
+    let mut learner = FrequencyLearner::default();
+    // 填满到容量上限（LAST_CHOICE_CAP=256），最早的被淘汰
+    for i in 0..300 {
+        learner.record_choice(&format!("inp{i}"), "词");
+    }
+    // 最早的 inp0 应该被淘汰，不再是最近选择
+    assert!(!learner.is_last_choice("inp0", "词"));
+    // 最新的 inp299 还在
+    assert!(learner.is_last_choice("inp299", "词"));
+}

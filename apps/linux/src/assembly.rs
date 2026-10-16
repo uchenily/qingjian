@@ -9,7 +9,8 @@ use qingjian_core::{EmojiTable, Engine, Language};
 use qingjian_dictionary::{Dictionary, WordList};
 use qingjian_learning::{FrequencyLearner, InputLog, UsageStats, VocabularyBook};
 use qingjian_lm::BigramModel;
-use qingjian_neural::{CharScorer, NeuralError};
+use qingjian_core::sentence::SentenceScorer;
+use qingjian_neural::{CharScorer, NeuralError, P2cScorer};
 use qingjian_platform::extra_dictionaries;
 use qingjian_platform::{Config, ConfigError, LocalModelConfig, LogLevel};
 use qingjian_translate::{Glossary, LayeredTranslator, LevelTable, PersonalGlossary};
@@ -25,7 +26,7 @@ pub(crate) struct Host {
     pub(crate) dispatch: Dispatch,
 
     /// 正在后台加载的模型；加载完接到 Engine 上就清掉。
-    model_loader: Option<Receiver<Result<CharScorer, NeuralError>>>,
+    model_loader: Option<Receiver<Result<Box<dyn SentenceScorer>, NeuralError>>>,
 
     /// 上次套用的 `[model]`，变了才重载 / 卸载。
     applied_model: Option<LocalModelConfig>,
@@ -328,18 +329,25 @@ impl Host {
         if self.model_loader.is_some() || self.engine.has_sentence_scorer() {
             return;
         }
-        let Some(path) = paths::model_path() else {
+        let Some(path) = paths::p2c_model_path().or_else(paths::model_path) else {
             tracing::info!("没有本地整句模型文件，不重排");
             return;
         };
-        let (tx, rx) = channel::<Result<CharScorer, NeuralError>>();
+        let (tx, rx) = channel::<Result<Box<dyn SentenceScorer>, NeuralError>>();
         let spawned = std::thread::Builder::new()
             .name("qingjian-model-load".to_owned())
             .spawn(move || {
                 let started = Instant::now();
                 let loaded = CharScorer::load(&path).and_then(|scorer| {
-                    scorer.score("", &["的"])?;
-                    Ok(scorer)
+                    if scorer.vocab().sep().is_some() {
+                        let scorer = P2cScorer::new(scorer)
+                            .ok_or(NeuralError::Corrupt("含章·通变模型缺少 <sep> 分隔符"))?;
+                        scorer.0.score_p2c("ni", &["你"])?;
+                        Ok(Box::new(scorer) as Box<dyn SentenceScorer>)
+                    } else {
+                        scorer.score("", &["的"])?;
+                        Ok(Box::new(scorer) as Box<dyn SentenceScorer>)
+                    }
                 });
                 if loaded.is_ok() {
                     tracing::info!(
@@ -371,8 +379,7 @@ impl Host {
         };
         match rx.try_recv() {
             Ok(Ok(scorer)) => {
-                self.engine
-                    .set_async_sentence_scorer(Some(Box::new(scorer)));
+                self.engine.set_async_sentence_scorer(Some(scorer));
                 self.model_loader = None;
                 tracing::info!("本地整句模型已接上 Engine");
                 // 模型上线了：日志里补一条会话信息，之后的条目知道重排开着

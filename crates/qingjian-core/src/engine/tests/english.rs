@@ -26,7 +26,7 @@ fn neural_rescoring_does_not_break_english_tail_split_decision() {
     /// 偏爱短头段「小问题」，给长整句极低分，模拟重打分扭曲比分的极端情形。
     struct PrefersShortHead;
     impl SentenceScorer for PrefersShortHead {
-        fn score(&self, _context: &str, texts: &[&str]) -> Vec<f64> {
+        fn score(&self, _context: &str, _keys: &str, texts: &[&str]) -> Vec<f64> {
             texts
                 .iter()
                 .map(|t| if *t == "小问题" { 0.0 } else { -100.0 })
@@ -221,7 +221,7 @@ fn english_word_yields_to_a_chinese_word_the_user_keeps_choosing() {
     let dictionary = Dictionary::parse("可以\tke yi\t9000\n客运\tke yun\t100\n").unwrap();
     let mut engine = Engine::new(dictionary)
         .with_english(WordList::parse("key\n").unwrap())
-        .with_learner(Box::new(CountingLearner(HashMap::new())));
+        .with_learner(Box::new(CountingLearner::new()));
     let first_two = |engine: &Engine| {
         let all = texts_of(engine);
         (all[0].clone(), all[1].clone())
@@ -307,7 +307,7 @@ fn english_mode_suggests_from_the_word_list_and_keeps_the_typed_text() {
     .unwrap();
     let mut engine = engine()
         .with_english(words)
-        .with_learner(Box::new(CountingLearner(HashMap::new())));
+        .with_learner(Box::new(CountingLearner::new()));
     engine.set_english_mode(true);
     assert!(engine.english_mode());
     // 大小写跟着敲的走，marked text 就是敲的字母，没有拼音切分
@@ -499,7 +499,7 @@ fn english_word_that_is_also_valid_pinyin_rises_with_user_choices() {
     let dictionary = Dictionary::parse("你	ni	9000\n测	ce	8000\n呢	ne	3000\n").unwrap();
     let mut engine = Engine::new(dictionary)
         .with_english(WordList::parse("nice\n").unwrap())
-        .with_learner(Box::new(CountingLearner(HashMap::new())));
+        .with_learner(Box::new(CountingLearner::new()));
     engine.set_shuangpin(Some(Scheme::Xiaohe));
     let first = |engine: &Engine| texts_of(engine).into_iter().next().unwrap();
     let pick = |engine: &mut Engine, text: &str| {
@@ -611,8 +611,8 @@ fn mid_english_word_that_loses_to_plain_does_not_appear() {
 }
 
 /// 用户选过英文词多次后，中英混输里英文切法排第一：`fwihnice` → 非常nice。
-/// `nice` 双拼 = `ni'ce`（你侧），`competes=true`，冷启动时 `mixed_beats_plain` 可能判拼音赢；
-/// 但用户选过 `nice` 多次（`weight >= ENGLISH_TAIL_USER_WIN`）后直接排第一，不再跟拼音比分。
+/// `nice` 双拼 = `ni'ce`（你侧），`competes=true`，冷启动时 `mixed_beats_plain` 判拼音赢；
+/// 但用户选过 `nice` 多次后 `mixed_beats_plain` 里的 `english_bonus` 加分 + 不扣切换代价，英文切法赢。
 #[test]
 fn mid_english_word_user_chose_often_ranks_first() {
     let dictionary =
@@ -621,7 +621,7 @@ fn mid_english_word_user_chose_often_ranks_first() {
     counts.insert("nice".to_owned(), 10);
     let mut engine = Engine::new(dictionary)
         .with_english(WordList::parse("nice	nice	5370\n").unwrap())
-        .with_learner(Box::new(CountingLearner(counts)));
+        .with_learner(Box::new(CountingLearner(counts, std::cell::RefCell::new(None))));
     engine.set_shuangpin(Some(Scheme::Xiaohe));
     engine.set_input("fwihnice");
     let query = engine.query().unwrap();
@@ -635,7 +635,7 @@ fn shuangpin_picks_longest_english_word_over_short_acronym() {
     let dictionary = Dictionary::parse("我	wo	9000\n的	de	9000\n达	da	100\n塔	ta	100\n巴	ba	100\n瑟	se	100\n").unwrap();
     let mut engine = Engine::new(dictionary)
         .with_english(WordList::parse("DE	de	5230\ndatabase	database	4310\n").unwrap())
-        .with_learner(Box::new(CountingLearner(HashMap::new())));
+        .with_learner(Box::new(CountingLearner::new()));
     engine.set_shuangpin(Some(Scheme::Xiaohe));
     engine.set_input("wodedatabase");
     let query = engine.query().unwrap();

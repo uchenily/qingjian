@@ -206,24 +206,24 @@ impl Engine {
     }
 
     pub fn with_learner(mut self, learner: Box<dyn Learner>) -> Self {
-        self.learner.replace(learner);
+        self.learner = learner;
         self.forget_span_cache();
         self
     }
 
     pub fn with_input_logger(mut self, logger: Box<dyn InputLogger>) -> Self {
-        self.logger.replace(logger);
+        self.logger = logger;
         self
     }
 
     /// 运行时换输入日志的落盘方（开关、清空之后）。旧的先 flush。
     pub fn set_input_logger(&mut self, logger: Box<dyn InputLogger>) {
         self.logger.flush();
-        self.logger.replace(logger);
+        self.logger = logger;
     }
 
     pub fn input_logger_mut(&mut self) -> &mut dyn InputLogger {
-        self.logger.inner_mut()
+        self.logger.as_mut()
     }
 
     pub fn with_usage_meter(mut self, meter: Box<dyn UsageMeter>) -> Self {
@@ -275,13 +275,13 @@ impl Engine {
     }
 
     pub fn learner(&self) -> &dyn Learner {
-        self.learner.inner()
+        self.learner.as_ref()
     }
 
     /// 拿到可变的 Learner 就当它要改：格子缓存一起作废。
     pub fn learner_mut(&mut self) -> &mut dyn Learner {
         self.forget_span_cache();
-        self.learner.inner_mut()
+        self.learner.as_mut()
     }
 
     pub fn learning_language(&self) -> Language {

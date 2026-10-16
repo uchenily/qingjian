@@ -27,6 +27,8 @@ impl Learner for FrequencyLearner {
         if self.choice_count() > MAX_CHOICE_ENTRIES {
             self.decay_choices();
         }
+        // 记最近选的词：排序时它在同一个输入串下排第一
+        self.touch_last_choice(input, text);
         tracing::debug!(input, text, "记录输入串下的选择");
     }
 
@@ -36,6 +38,10 @@ impl Learner for FrequencyLearner {
             .and_then(|texts| texts.get(text))
             .copied()
             .unwrap_or(0)
+    }
+
+    fn is_last_choice(&self, input: &str, text: &str) -> bool {
+        self.last_choice.iter().rev().any(|(i, t)| i == input && t == text)
     }
 
     fn record_raw(&mut self, input: &str) {
@@ -66,6 +72,10 @@ impl Learner for FrequencyLearner {
         }
         if texts.is_empty() {
             self.choices.remove(input);
+        }
+        // 撤销的正好是最近选的：清掉 last_choice，回到按累计次数排
+        if self.last_choice.iter().rev().any(|(i, t)| i == input && t == text) {
+            self.last_choice.retain(|(i, t)| !(i == input && t == text));
         }
     }
 

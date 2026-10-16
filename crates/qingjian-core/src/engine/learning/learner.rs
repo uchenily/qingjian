@@ -22,6 +22,11 @@ pub trait Learner: Send {
         0
     }
 
+    /// `text` 是不是 `input` 下最近一次选的词（当前会话内）：排序时最近选的排第一，压过累计次数。
+    fn is_last_choice(&self, _input: &str, _text: &str) -> bool {
+        false
+    }
+
     /// 用户对输入串 `input` 按了回车原样上屏，而当时拼写纠错正生效：这个串就是要原样打的，以后不纠。
     fn record_raw(&mut self, _input: &str) {}
 
