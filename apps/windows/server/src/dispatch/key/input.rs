@@ -1,6 +1,6 @@
 //! 按键怎么作用到 Engine / 高亮上。分流规则与 macOS 壳的 `handle_text` / `handle_command` 对齐。
 
-use qingjian_core::{CandidateKind, shortcut};
+use qingjian_core::CandidateKind;
 use qingjian_platform::protocol::KeyEvent;
 
 use super::{Effect, codes, with_prefix};
@@ -8,10 +8,8 @@ use crate::dispatch::Router;
 
 impl Router {
     /// 功能键靠键码，其余靠字符。组句中修饰键 + 数字是快捷键；带 Ctrl / Alt / Win 而没配到快捷键的键归应用。
-    /// 表达式模式里 Shift + 数字打的是 `^ * ( )`，不当快捷键。
     pub(crate) fn apply_key(&mut self, event: &KeyEvent) -> Effect {
         if self.composing()
-            && !self.engine.expression_mode()
             && let Some(digit) = codes::digit_key(event.virtual_key)
             && let Some(effect) = self.apply_digit_shortcut(digit, event.modifiers.chord())
         {
@@ -219,12 +217,9 @@ impl Router {
     }
 
     /// 组句中的可打印键：数字选当前页第 N 个，翻页键翻页，空格上屏高亮，其余进英文直输段。
-    /// 表达式模式（`v1+2`）里数字和运算符进算式；微软 / 搜狗双拼的 `;` 是 ing 键，末尾有落单声母时进缓冲区。
+    /// 微软 / 搜狗双拼的 `;` 是 ing 键，末尾有落单声母时进缓冲区。
     fn apply_printable(&mut self, c: char, event: &KeyEvent) -> Effect {
-        let expression = self.engine.expression_mode();
-        if (expression && shortcut::is_expression_char(c))
-            || (c == ';' && self.engine.takes_semicolon())
-        {
+        if c == ';' && self.engine.takes_semicolon() {
             self.engine.push(c);
             return Effect::Changed(None);
         }
@@ -266,12 +261,6 @@ impl Router {
                 text.push(c);
             }
             return Effect::Changed(Some(text));
-        }
-        // 表达式模式下的其他字符不进缓冲区（与 macOS 壳一致）：先把高亮候选上屏，再按没在组句处理这个键。
-        if c != '\'' && expression {
-            let committed = self.commit_highlighted();
-            let effect = self.apply_punctuation(c, event);
-            return with_prefix(Some(committed), effect, c);
         }
         self.engine.push(c);
         Effect::Changed(None)

@@ -4,7 +4,7 @@
 //! fcitx5 送来的是 xkb keysym（`sym`）+ keycode + modifiers。字母数字与标点的 keysym 就是 ASCII；
 //! 功能键的 keysym 是 `XK_BackSpace` / `XK_Return` / `XK_Escape` / `XK_Tab` / 方向键等。
 
-use qingjian_core::{Engine, shortcut};
+use qingjian_core::Engine;
 use qingjian_platform::Modifiers;
 
 use super::{Dispatch, KeyOutcome, KeyResult};
@@ -323,10 +323,7 @@ fn apply_printable(
     c: char,
     _shift: bool,
 ) -> KeyOutcome {
-    let expression = engine.expression_mode();
-    if (expression && shortcut::is_expression_char(c))
-        || (c == ';' && engine.takes_semicolon())
-    {
+    if c == ';' && engine.takes_semicolon() {
         engine.push(c);
         dispatch.refresh(engine);
         return KeyOutcome::consumed(dispatch.current_frame(engine));
@@ -382,12 +379,6 @@ fn apply_printable(
             text.push(c);
         }
         return KeyOutcome::committed(text, frame_after(dispatch, engine));
-    }
-    // 表达式模式下的其他字符：先把高亮候选上屏，再按非组句处理
-    if c != '\'' && expression {
-        let committed = commit_highlighted(dispatch, engine);
-        let effect = apply_punctuation(engine, c, false);
-        return with_prefix(Some(committed), effect, c);
     }
     // 其他可打印字符（含 `'`、半角标点进英文直输段）
     engine.push(c);

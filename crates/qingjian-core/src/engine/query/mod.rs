@@ -31,7 +31,7 @@ impl Engine {
                 Query::custom_only(
                     self.composition.text(),
                     self.composition.cursor(),
-                    self.shuangpin.is_some() || self.zhuyin,
+                    self.shuangpin.is_some(),
                     self.composition.scope(),
                     self.marked_rest(self.composition.rest()),
                 )
@@ -67,10 +67,7 @@ impl Engine {
         if self.english_mode {
             return Ok(self.query_english(keys, rest, start));
         }
-        if self.modes().is_expression(keys, self.zhuyin) {
-            return Ok(self.query_expression(keys, rest, start));
-        }
-        if is_raw(keys, self.modes(), self.shuangpin, self.zhuyin) {
+        if is_raw(keys, self.shuangpin) {
             return Ok(self.query_raw(keys, rest, start));
         }
         // 双拼先解成全拼（音节间已用 `'` 连好，切分没有歧义）；英文词要先按原始键串切，
@@ -136,7 +133,7 @@ impl Engine {
                     text: self.composition.text().to_owned(),
                     cursor: self.composition.cursor(),
                     rest,
-                    decoded_keys: self.shuangpin.is_some() || self.zhuyin,
+                    decoded_keys: self.shuangpin.is_some(),
                     typed_display: decoded.as_ref().map(|d| d.marked()),
                     correction: None,
                     rescored: false,
@@ -283,7 +280,7 @@ impl Engine {
             text: self.composition.text().to_owned(),
             cursor: self.composition.cursor(),
             rest,
-            decoded_keys: self.shuangpin.is_some() || self.zhuyin,
+            decoded_keys: self.shuangpin.is_some(),
             typed_display,
             correction,
             rescored: false,
@@ -293,38 +290,6 @@ impl Engine {
                 rank,
             },
         })
-    }
-
-    /// 表达式模式（`v` 开头）：不解析拼音，候选是算式结果 / 中文数字，再加上整段是英文词的情况（`very`）。
-    /// preedit 原样显示输入。
-    pub(super) fn query_expression(&self, scope: &str, rest: String, start: Instant) -> Query {
-        let mut items = shortcut::candidates(scope, self.modes().expression, &jiff::Zoned::now());
-        if let Some(word) = self.english.as_ref().and_then(|english| english.get(scope)) {
-            items.push(Candidate {
-                text: word.to_owned(),
-                kind: CandidateKind::English,
-                syllables: Vec::new(),
-                reading: None,
-                translation: None,
-            });
-        }
-        Query {
-            segmentations: Vec::new(),
-            candidates: CandidateList { items },
-            tail: scope.to_owned(),
-            text: self.composition.text().to_owned(),
-            cursor: self.composition.cursor(),
-            rest,
-            decoded_keys: self.shuangpin.is_some() || self.zhuyin,
-            typed_display: None,
-            correction: None,
-            rescored: false,
-            timings: Timings {
-                parse: Duration::ZERO,
-                lookup: Duration::ZERO,
-                rank: start.elapsed(),
-            },
-        }
     }
 
     /// 英文直输段：唯一候选就是原文（`no-way`），空格 / 回车都上屏它；preedit 原样显示。
@@ -343,7 +308,7 @@ impl Engine {
             text: self.composition.text().to_owned(),
             cursor: self.composition.cursor(),
             rest,
-            decoded_keys: self.shuangpin.is_some() || self.zhuyin,
+            decoded_keys: self.shuangpin.is_some(),
             typed_display: None,
             correction: None,
             rescored: false,
@@ -382,7 +347,7 @@ impl Engine {
             text: self.composition.text().to_owned(),
             cursor: self.composition.cursor(),
             rest,
-            decoded_keys: self.shuangpin.is_some() || self.zhuyin,
+            decoded_keys: self.shuangpin.is_some(),
             typed_display: None,
             correction: None,
             rescored: false,

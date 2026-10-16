@@ -62,10 +62,9 @@ fn shuangpin_records_choices_by_full_pinyin() {
 }
 
 #[test]
-fn shuangpin_gives_letter_mode_keys_back_to_syllables() {
+fn shuangpin_treats_letter_prefixes_as_syllables() {
     let mut engine = xiaohe();
     engine.set_input("v");
-    assert!(!engine.expression_mode());
     assert_eq!(engine.query().unwrap().marked_text(), "zh");
     engine.set_input("u1");
     assert_eq!(engine.query().unwrap().marked_text(), "u1");

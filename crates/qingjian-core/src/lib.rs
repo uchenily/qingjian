@@ -20,7 +20,6 @@ pub mod sentence;
 pub mod shortcut;
 pub mod shuangpin;
 pub mod storage;
-pub mod zhuyin;
 
 pub use custom_phrase::CustomPhrase;
 
@@ -34,7 +33,7 @@ pub use emoji::EmojiTable;
 pub use engine::{
     AnnotationReport, BOOKS, Book, CommitEntry, Engine, FRESH_UNTIL, Forgotten,
     INPUT_LOG_VERSION, InputLogEntry, InputLogger, InputSource, Learner, LevelCount, MarkedKind,
-    MarkedSegment, ModeKeys, NEURAL_MARGIN, NEURAL_WEIGHT, NoInputLogger, NoLearner, NoTranslator,
+    MarkedSegment, NEURAL_MARGIN, NEURAL_WEIGHT, NoInputLogger, NoLearner, NoTranslator,
     NoUsageMeter, NoVocabularyTracker, Query, RESCORE_CONTEXT_CHARS, Timings, Translator, Usage,
     UsageMeter, UsageSummary, VocabularySummary, VocabularyTracker, book_scale,
 };

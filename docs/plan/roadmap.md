@@ -59,7 +59,7 @@
 - [x] 个人 n-gram（Core `sentence::UserNgram`，`Learner::user_ngram()`）：上屏词序列在线计数，与静态模型插值进 Viterbi；`user-ngram.tsv` 落盘；
   2026-09-06 加三元（绝对折扣回退到二元，Viterbi 前二词取前驱回指，`CommitChain` 记两个词）
 - [x] 自动造词：连着选出的两个词合起来词库没有、记够次数就成用户词（同段拼音两次 / 分段三次）
-- [x] 快捷候选（Core `shortcut`）：`rq` / `sj` / `xq` 出日期 / 时间 / 星期，`v` 开头表达式模式出四则运算结果与中文数字（见 candidate-ui.md）
+- [x] 快捷候选（Core `shortcut`）：`rq` / `sj` / `xq` 出日期 / 时间 / 星期（见 candidate-ui.md）。表达式模式已随「双拼优先」的精简移除
 - [x] 中文标点（Core `punctuation`：全角映射、引号配对、数字后的点保持半角；组句期间 `,` `.` 把高亮候选上屏再补标点；配成翻页键时只翻页）
 - [x] 候选框顶部自绘 preedit 行与光标（不依赖应用画插入点）
 - [x] bundle id 改为 `app.qingjian.inputmethod`（2026-09-06，域名 qingjian.app 注册后；`TISInputSourceID` 与连接名同步，旧 id `com.yenharvey.qingjian` 的输入源要在系统设置里删掉重加）
@@ -186,8 +186,8 @@ Core 永远不联网。第一个实现接 DeepSeek（OpenAI 兼容接口），�
 - [x] 展示：云朵图标（SF Symbols `cloud`）区分，**不重排已有候选、不阻塞输入**
 - [x] 隐私：默认关闭；开启时菜单栏「中 / 英」带 ☁︎；Secure Input 绝不发送；观察长度在 Core 裁剪
 - [x] 配置：`~/Library/Application Support/Qingjian/config.toml` 的 `[predict]`，首次运行写模板；密钥可填配置或环境变量
-- [x] 问字模式：`?` + 问题拼音，`PredictionKind::Question` 走同一条 Predictor 通道、单独的提示词，答案带声调读音、不校验拼音（见 candidate-ui.md）
-- [x] 问字只答字不复述（2026-09-05）：请求带本地整句转换出的问题汉字（`guess`），提示词只答被问的字，`restates_question` 剔掉把问题写回来的「答案」
+- [x] 问字模式（已移除）：`?` + 问题拼音，`PredictionKind::Question` 走同一条 Predictor 通道、单独的提示词，答案带声调读音、不校验拼音（见 candidate-ui.md）
+- [x] 问字只答字不复述（已移除，2026-09-05）：请求带本地整句转换出的问题汉字（`guess`），提示词只答被问的字，`restates_question` 剔掉把问题写回来的「答案」
 - [x] 菜单开关、偏好设置窗口里的开关 / 接口 / 模型 / 密钥
 - [x] 释义表进 `.qj`（2026-09-05）：`Glossary` 双存法（TSV 哈希表 / 映射的 arena + 词条表 + 释义表 + 哈希索引），`pack glossary --language`，启动回到 50 ms
 - [x] 翻译选中文字读不到选区时候选窗口提示 2.5 秒（`host/notice.rs`）

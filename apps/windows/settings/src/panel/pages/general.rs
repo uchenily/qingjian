@@ -61,13 +61,6 @@ pub(crate) fn view(settings: &Settings, context: &mut ViewContext<Settings>) -> 
             ),
         ),
         field(
-            "大千注音",
-            "启用大千注音键盘布局（容错设定如 ㄢㄤ、ㄣㄥ 不分，请至「模糊音」分页开启）。",
-            ToggleSwitch::new()
-                .is_on(g.zhuyin)
-                .on_toggled(context.callback(Message::Zhuyin)),
-        ),
-        field(
             "中文模式标点转全角",
             "没在打拼音时敲 , . ? ! 等出「，。？！」，数字后面的点保持半角；悬浮状态条的「，。」格也能切，切的是当前模式那份。",
             ToggleSwitch::new()

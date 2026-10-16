@@ -26,35 +26,6 @@ impl Engine {
         self.shuangpin
     }
 
-    /// 設置是否啟用注音模式。開啟後鍵盤輸入按大千佈局解析。
-    pub fn set_zhuyin_mode(&mut self, on: bool) {
-        self.zhuyin = on;
-        self.forget_span_cache();
-    }
-
-    /// 目前是否處於注音模式。
-    pub fn is_zhuyin_mode(&self) -> bool {
-        self.zhuyin
-    }
-
-    /// 判斷注音模式下目前是否還需要輸入聲調。
-    /// 供殼（平台層）用來判斷空白鍵是應該進緩衝區作為聲調，還是直接用來選詞。
-    pub fn zhuyin_needs_tone(&self) -> bool {
-        if !self.zhuyin {
-            return false;
-        }
-        let raw = self.composition.text();
-        if raw.is_empty() {
-            return false;
-        }
-        let decoded = crate::zhuyin::decode(raw);
-        if let Some(last) = decoded.units().last() {
-            !last.complete && last.pinyin != "'"
-        } else {
-            false
-        }
-    }
-
     /// 组句中敲 `;` 是否该进缓冲区：微软 / 搜狗双拼里它是 ing 的韵母键，只在末尾有落单的声母时收，
     /// 其他时候仍是标点。
     pub fn takes_semicolon(&self) -> bool {
@@ -64,23 +35,10 @@ impl Engine {
             .is_some_and(|scheme| scheme.decode(body).pending_initial())
     }
 
-    /// 有效的模式键：双拼下 v / u / i 都是音节键，字母模式键让位。
-    pub(super) fn modes(&self) -> ModeKeys {
-        if self.shuangpin.is_some() {
-            ModeKeys::LETTERLESS
-        } else {
-            self.modes
-        }
-    }
-
     /// 双拼开着时把一段键解成全拼；全拼下为 `None`，调用方原样用键。
     pub(super) fn decode(&self, keys: &str) -> Option<EngineDecoded> {
-        if self.zhuyin {
-            Some(EngineDecoded::Zhuyin(crate::zhuyin::decode(keys)))
-        } else {
-            self.shuangpin
-                .map(|scheme| EngineDecoded::Shuangpin(scheme.decode(keys)))
-        }
+        self.shuangpin
+            .map(|scheme| EngineDecoded::Shuangpin(scheme.decode(keys)))
     }
 
     /// 光标后剩余拼音的显示形式：双拼先解码；能切就按音节用 `'` 连上，切不动就原样。
@@ -245,20 +203,6 @@ impl Engine {
 
     pub fn set_translator(&mut self, translator: Box<dyn Translator>) {
         self.translator = translator;
-    }
-
-    pub fn with_mode_keys(mut self, keys: ModeKeys) -> Self {
-        self.modes = keys.sanitized();
-        self
-    }
-
-    /// 非法组合（相同、或不是 v / u / i）整个退回缺省。
-    pub fn set_mode_keys(&mut self, keys: ModeKeys) {
-        self.modes = keys.sanitized();
-    }
-
-    pub fn mode_keys(&self) -> ModeKeys {
-        self.modes
     }
 
     pub fn with_learner(mut self, learner: Box<dyn Learner>) -> Self {

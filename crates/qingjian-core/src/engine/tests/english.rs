@@ -270,9 +270,6 @@ fn hyphen_turns_the_buffer_into_a_raw_english_segment() {
     let raw = query.candidates.items[0].clone();
     assert_eq!(engine.commit(&raw), "no-way");
     assert!(engine.composition().is_empty());
-    // 表达式模式优先
-    engine.set_input("v1-2");
-    assert!(engine.expression_mode() && !engine.raw_mode());
 }
 
 #[test]

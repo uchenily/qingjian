@@ -210,8 +210,6 @@ fn assemble_engine(config: &Config) -> Result<Engine, InitError> {
     }
     engine.set_fuzzy(config.fuzzy);
     engine.set_shuangpin(config.general.shuangpin());
-    engine.set_zhuyin_mode(config.general.zhuyin);
-    engine.set_mode_keys(config.shortcut.mode);
     engine.set_full_width_punctuation(config.general.full_width_punctuation);
     Ok(engine)
 }

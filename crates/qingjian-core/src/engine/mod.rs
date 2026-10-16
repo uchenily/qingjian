@@ -13,7 +13,6 @@ mod extras;
 mod input_log;
 mod learning;
 mod marked;
-mod mode_keys;
 mod privacy;
 mod query;
 mod rescoring;
@@ -37,7 +36,6 @@ pub use input_log::{
 };
 pub use learning::{Forgotten, Learner, NoLearner};
 pub use marked::{MarkedKind, MarkedSegment};
-pub use mode_keys::ModeKeys;
 
 pub use query::Query;
 pub use statistics::{BOOKS, Book, NoUsageMeter, Usage, UsageMeter, UsageSummary, book_scale};
@@ -71,9 +69,6 @@ pub struct Engine {
 
     /// 译文提供方，缺省为 [`NoTranslator`]。
     translator: Box<dyn Translator>,
-
-    /// 前缀模式键（表达式 / 问字）。
-    modes: ModeKeys,
 
     /// 附加词库（领域词库、用户导入的），与主词库一起查词、一起进整句词图；不参与语言模型（它们没有 bigram，
     /// 走词频兜底）。壳按用户目录 `dicts/` 与配置 `[dictionaries]` 装配。
@@ -201,9 +196,6 @@ pub struct Engine {
     /// 双拼方案，`None` 为全拼。开着时缓冲区里是双拼键，查词前先解成全拼（见 [`crate::shuangpin`]）。
     shuangpin: Option<Scheme>,
 
-    /// 注音模式开关，開著時緩衝區裡是注音大千鍵位，查詞前先解成拼音（見 [`crate::zhuyin`]）。
-    zhuyin: bool,
-
     /// emoji 表，没有就不出 emoji 候选。
     emoji: Option<EmojiTable>,
 }
@@ -285,7 +277,6 @@ impl Engine {
             extra_dictionaries: Vec::new(),
             translator: Box::new(NoTranslator),
             english_translator: Box::new(NoTranslator),
-            modes: ModeKeys::default(),
             learner: learning::MutedLearner::new(Box::new(NoLearner)),
             composition: Composition::default(),
             english: None,
@@ -325,26 +316,19 @@ impl Engine {
             chain: CommitChain::default(),
             fuzzy: FuzzyRules::default(),
             shuangpin: None,
-            zhuyin: false,
             emoji: None,
         }
     }
 }
 
-/// 缓冲区是否是英文直输段：含拼音键与 `'` 以外的字符（`no-way`、`a.b`），且不是表达式 / 问字模式。
+/// 缓冲区是否是英文直输段：含拼音键与 `'` 以外的字符（`no-way`、`a.b`）。
 /// 微软 / 搜狗双拼下 `;` 也是拼音键。
-fn is_raw(text: &str, modes: ModeKeys, shuangpin: Option<Scheme>, zhuyin: bool) -> bool {
-    let is_key = |c: char| {
-        if zhuyin {
-            crate::zhuyin::layout::map_key(c).is_some() || c == ' '
-        } else {
-            match shuangpin {
-                Some(scheme) => scheme.is_key(c),
-                None => c.is_ascii_lowercase(),
-            }
-        }
+fn is_raw(text: &str, shuangpin: Option<Scheme>) -> bool {
+    let is_key = |c: char| match shuangpin {
+        Some(scheme) => scheme.is_key(c),
+        None => c.is_ascii_lowercase(),
     };
-    if text.is_empty() || modes.is_expression(text, zhuyin) {
+    if text.is_empty() {
         return false;
     }
     if text.chars().any(|c| !(is_key(c) || c == '\'')) {

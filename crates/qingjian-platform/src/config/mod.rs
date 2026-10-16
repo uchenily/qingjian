@@ -45,7 +45,7 @@ pub struct Config {
     #[serde(deserialize_with = "deserialize_phrases")]
     pub custom_phrases: Vec<qingjian_core::CustomPhrase>,
 
-    /// 快捷键：前缀模式键（表达式 / 问字）与上屏译词的修饰键组合。
+    /// 快捷键：壳层的修饰键组合。
     pub shortcut: ShortcutConfig,
 
     /// 模糊音开关。
@@ -160,7 +160,7 @@ full_width_punctuation = true
 # 英文模式下的同一件事，中英各记一份，状态条切的是当前模式那份；只有 Windows 用
 english_full_width_punctuation = false
 # 双拼方案：留空为全拼；xiaohe 小鹤 / ziranma 自然码 / microsoft 微软 / sogou 搜狗
-# 开着时 v / u / i 都是音节键，表达式与问字模式只能用 ? 开头进；微软、搜狗方案的 ; 键是 ing
+# 开着时 v / u / i 都是音节键；微软、搜狗方案的 ; 键是 ing
 shuangpin = ""
 # 日志级别：info 缺省 / debug 详细（会记录敲的拼音与上屏的文字，配合作者排查问题时再开）。日志在 ~/Library/Logs/Qingjian/
 log_level = "info"
@@ -176,11 +176,6 @@ input_log = true
 # enabled = true    # 是否启用；停用仍保留位置
 
 [shortcut]
-# 前缀模式键，只能是 v / u / i 之一且互不相同（这三个字母不是任何拼音音节的开头）
-# 表达式模式：v1+2 出 3，v123 出中文数字
-expression = "v"
-# 问字模式：usangemu 问「三个木」（云端答），u4e00 出码点对应的字符（本地答）。? 开头永远也是问字
-question = "u"
 "#,
     template_shortcut_keys!(),
     r#"
@@ -440,7 +435,7 @@ mod tests {
     #[test]
     fn general_and_shortcut_sections_parse() {
         let config: Config = toml::from_str(
-            "[general]\npage_size = 5\npage_keys = \"[]\"\ntheme = \"dark\"\nlayout = \"horizontal\"\npreedit = \"window\"\n[shortcut]\nexpression = \"i\"\n",
+            "[general]\npage_size = 5\npage_keys = \"[]\"\ntheme = \"dark\"\nlayout = \"horizontal\"\npreedit = \"window\"\n[shortcut]\ndelete_candidate = \"control\"\n",
         )
         .unwrap();
         assert_eq!(config.general.page_size(), 5);
@@ -451,8 +446,7 @@ mod tests {
         assert_eq!(config.general.learning_language, "en");
         assert_eq!(config.general.shuangpin(), None);
         assert_eq!(config.general.log_level, LogLevel::Info);
-        assert_eq!(config.shortcut.mode.expression, 'i');
-        assert_eq!(config.shortcut.delete_keys(), Modifiers::SHIFT);
+        assert!(config.shortcut.delete_keys().control);
     }
 
     #[test]
@@ -461,11 +455,11 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         Config::set_value(&path, "general", "page_size", 5i64).unwrap();
         Config::set_value(&path, "general", "theme", "dark").unwrap();
-        Config::set_value(&path, "shortcut", "expression", "i").unwrap();
+        Config::set_value(&path, "shortcut", "delete_candidate", "control").unwrap();
         let config = Config::load(&path).unwrap();
         assert_eq!(config.general.page_size, 5);
         assert_eq!(config.general.theme, ThemeMode::Dark);
-        assert_eq!(config.shortcut.mode.expression, 'i');
+        assert!(config.shortcut.delete_keys().control);
         let _ = std::fs::remove_file(&path);
     }
 

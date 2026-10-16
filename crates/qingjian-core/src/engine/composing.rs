@@ -87,14 +87,10 @@ impl Engine {
         });
     }
 
-    /// 键盘方案的键（双拼方案如 `xiaohe`、注音为 `zhuyin`），全拼为空；输入日志用。
+    /// 键盘方案的键（双拼方案如 `xiaohe`），全拼为空；输入日志用。
     pub(super) fn scheme_key(&self) -> String {
-        if self.zhuyin {
-            "zhuyin".to_owned()
-        } else {
-            self.shuangpin
-                .map_or_else(String::new, |s| s.key().to_owned())
-        }
+        self.shuangpin
+            .map_or_else(String::new, |s| s.key().to_owned())
     }
 
     /// 组句里要删东西了：第一次删之前把缓冲区留个快照，上屏时对比最终键串，不同就是一次重打（`retype`）。
@@ -171,14 +167,13 @@ impl Engine {
     }
 
     /// 删掉光标前的一个音节（壳里 ⌥⌫）：全拼按最优切分的最后一个音节连同它后面的 `'`，切不动的尾巴整个删；
-    /// 双拼两键一音节，落单的一键单删；英文直输段 / 表达式 / 问字里删最后一段字母或数字，标点一次删一个。
+    /// 双拼两键一音节，落单的一键单删；英文直输段里删最后一段字母或数字，标点一次删一个。
     /// 光标在开头时返回 `false`。
     pub fn delete_syllable_backward(&mut self) -> bool {
         self.note_edit();
         let cursor = self.composition.cursor();
         let before = &self.composition.text()[..cursor];
-        let plain =
-            self.raw_mode() || self.expression_mode() || self.zhuyin;
+        let plain = self.raw_mode();
         let len = unit_len_before(before, self.shuangpin.is_some(), plain);
         self.composition.delete_before_cursor(len)
     }
@@ -187,8 +182,7 @@ impl Engine {
     pub fn move_cursor_syllable_left(&mut self) -> bool {
         let cursor = self.composition.cursor();
         let before = &self.composition.text()[..cursor];
-        let plain =
-            self.raw_mode() || self.expression_mode() || self.zhuyin;
+        let plain = self.raw_mode();
         let len = unit_len_before(before, self.shuangpin.is_some(), plain);
         len > 0 && (0..len).all(|_| self.composition.move_left())
     }
@@ -197,8 +191,7 @@ impl Engine {
     pub fn move_cursor_syllable_right(&mut self) -> bool {
         let cursor = self.composition.cursor();
         let after = &self.composition.text()[cursor..];
-        let plain =
-            self.raw_mode() || self.expression_mode() || self.zhuyin;
+        let plain = self.raw_mode();
         let len = unit_len_after(after, self.shuangpin.is_some(), plain);
         len > 0 && (0..len).all(|_| self.composition.move_right())
     }
@@ -226,23 +219,9 @@ impl Engine {
         self.composition.move_end();
     }
 
-    /// 是否处在表达式模式（缓冲区以表达式键、缺省 `v` 开头）。此时壳应把数字和运算符也交给 [`Self::push`]，而不是当选词键。
-    pub fn expression_mode(&self) -> bool {
-        !self.has_custom_phrase()
-            && self
-                .modes()
-                .is_expression(self.composition.text(), self.zhuyin)
-    }
-
     /// 英文直输段：缓冲区里有拼音以外的字符（`no-way`），整段原样上屏、不解析拼音。
-    /// 表达式模式与问字模式优先于它。
     pub fn raw_mode(&self) -> bool {
-        is_raw(
-            self.composition.text(),
-            self.modes(),
-            self.shuangpin,
-            self.zhuyin,
-        )
+        is_raw(self.composition.text(), self.shuangpin)
     }
 
     /// 用一段完整拼音替换当前缓冲区，供 CLI 和测试一次性喂入。
@@ -262,13 +241,7 @@ impl Engine {
             // 缓存里还是「要纠」，清掉让下次重算
             *self.correction_cache.borrow_mut() = None;
         }
-        let raw = if self.is_zhuyin_mode() && !self.english_mode {
-            self.decode(self.composition.text())
-                .map(|d| d.marked())
-                .unwrap_or_else(|| self.composition.text().to_owned())
-        } else {
-            self.composition.text().to_owned()
-        };
+        let raw = self.composition.text().to_owned();
         if raw.is_empty() {
             // 壳在回车 / 失焦时不管有没有在组句都会来一趟：空的不记日志、不计统计
             self.clear();
@@ -336,7 +309,7 @@ fn unit_len_before(before: &str, shuangpin: bool, plain: bool) -> usize {
     let Some(last) = trimmed.chars().last() else {
         return separators;
     };
-    // 直输段 / 表达式 / 问字，或末尾不是字母：字母数字连成一段删，其他字符一次一个
+    // 直输段，或末尾不是字母：字母数字连成一段删，其他字符一次一个
     if plain || !last.is_ascii_lowercase() {
         let run = if last.is_ascii_alphanumeric() {
             trimmed

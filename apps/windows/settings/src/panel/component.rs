@@ -37,7 +37,6 @@ impl Component for Settings {
             Message::Shuangpin(Some(i)) if i < general::SHUANGPIN.len() => {
                 self.save("general", "shuangpin", general::SHUANGPIN[i].1);
             }
-            Message::Zhuyin(on) => self.save("general", "zhuyin", on),
             Message::FullWidthPunctuation(on) => {
                 self.save("general", "full_width_punctuation", on);
             }
@@ -63,15 +62,6 @@ impl Component for Settings {
             // 快捷键页
             Message::PageKeys(Some(i)) if i < shortcut::PAGE_KEYS.len() => {
                 self.save("general", "page_keys", shortcut::PAGE_KEYS[i].1);
-            }
-            Message::ModeExpression(Some(i)) if i < shortcut::MODE_KEYS.len() => {
-                self.save("shortcut", "expression", shortcut::MODE_KEYS[i]);
-            }
-            Message::Translation(Some(i)) if i < shortcut::MODIFIERS.len() => {
-                self.save("shortcut", "translation", shortcut::MODIFIERS[i].1);
-            }
-            Message::TranslationSecond(Some(i)) if i < shortcut::MODIFIERS.len() => {
-                self.save("shortcut", "translation_second", shortcut::MODIFIERS[i].1);
             }
             Message::DeleteCandidate(Some(i)) if i < shortcut::MODIFIERS.len() => {
                 self.save("shortcut", "delete_candidate", shortcut::MODIFIERS[i].1);

@@ -150,8 +150,6 @@ impl StatusBar {
         };
         let mode = if view.english {
             "英".to_owned()
-        } else if view.zhuyin {
-            "注".to_owned()
         } else {
             match &view.scheme {
                 Some(scheme) => format!("中 · {scheme}"),

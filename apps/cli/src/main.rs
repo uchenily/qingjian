@@ -228,7 +228,6 @@ fn build_engine(args: &Args) -> Result<Engine, CliError> {
         tracing::info!(rules = ?config.fuzzy, "模糊音已启用");
     }
     engine.set_fuzzy(config.fuzzy);
-    engine.set_mode_keys(config.shortcut.mode);
     if let Some(scheme) = &args.shuangpin {
         config.general.shuangpin = if scheme == "off" {
             String::new()
@@ -239,10 +238,6 @@ fn build_engine(args: &Args) -> Result<Engine, CliError> {
     if let Some(scheme) = config.general.shuangpin() {
         tracing::info!(%scheme, "双拼已启用");
     }
-    if config.general.zhuyin {
-        tracing::info!("大千注音已启用");
-    }
     engine.set_shuangpin(config.general.shuangpin());
-    engine.set_zhuyin_mode(config.general.zhuyin);
     Ok(engine)
 }

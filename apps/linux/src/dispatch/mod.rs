@@ -8,7 +8,7 @@ mod result;
 
 use std::time::{Duration, Instant};
 
-use qingjian_core::{Engine, shortcut};
+use qingjian_core::Engine;
 use qingjian_platform::{Config, DEFAULT_PAGE_KEYS, LayoutMode, Modifiers, PreeditMode, ThemeMode};
 
 pub use key::KeyInput;
@@ -251,10 +251,9 @@ fn theme_code(theme: ThemeMode) -> u8 {
     }
 }
 
-// 引用占位，避免未使用警告（shortcut / Modifiers / DEFAULT_PAGE_KEYS 在 key 模块用）
+// 引用占位，避免未使用警告（Modifiers / DEFAULT_PAGE_KEYS 在 key 模块用）
 #[allow(dead_code)]
 fn _ensure_used() {
-    let _ = shortcut::is_expression_char('1');
     let _ = Modifiers::default();
     let _ = DEFAULT_PAGE_KEYS;
 }

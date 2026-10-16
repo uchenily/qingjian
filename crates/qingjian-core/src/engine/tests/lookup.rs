@@ -53,8 +53,8 @@ fn unparsable_tail_is_kept_aside() {
         .clone();
     engine.commit(&kaifa);
     assert_eq!(engine.composition().text(), "v");
-    // 剩下的 v 进表达式模式：没候选但也不报错
-    assert!(engine.query().unwrap().candidates.items.is_empty());
+    // 剩下的 v 在拼音里切不出音节：查候选报错，壳按「没有候选」处理
+    assert!(engine.query().is_err());
 }
 
 #[test]
@@ -247,28 +247,8 @@ fn shortcuts_follow_the_first_local_candidate() {
 }
 
 #[test]
-fn expression_mode_skips_pinyin_and_evaluates() {
-    let mut engine = self::engine();
-    assert!(!engine.expression_mode());
-    engine.set_input("v1+2");
-    assert!(engine.expression_mode());
-    let query = engine.query().unwrap();
-    assert_eq!(query.marked_text(), "v1+2");
-    assert_eq!(query.marked_cursor(), 4);
-    assert_eq!(query.candidates.items[0].text, "3");
-    assert_eq!(query.candidates.items[0].kind, CandidateKind::Shortcut);
-    assert_eq!(query.candidates.items[1].text, "1+2=3");
-    let result = query.candidates.items[0].clone();
-    assert_eq!(engine.commit(&result), "3");
-    assert!(engine.composition().is_empty());
-
-    // 只有 v：候选为空但不报错，preedit 照显示
-    engine.set_input("v");
-    let query = engine.query().unwrap();
-    assert!(query.candidates.items.is_empty());
-    assert_eq!(query.marked_text(), "v");
-
-    // v 开头的英文词仍能混输
+fn english_words_starting_with_v_still_mix_in() {
+    // `v` 本是表达式前缀，移除后 `very` 这类词照常走中英混输。
     let words = WordList::parse("very\n").unwrap();
     let mut engine = self::engine().with_english(words);
     engine.set_input("very");

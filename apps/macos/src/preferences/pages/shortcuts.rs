@@ -1,9 +1,8 @@
-//! 「快捷键」页：翻页键、模式键、译词上屏 / 删候选 / 翻译选中文字的组合键。
+//! 「快捷键」页：翻页键、删候选的组合键。
 
 use objc2::MainThreadMarker;
 use objc2::rc::Retained;
 use objc2_app_kit::NSPopUpButton;
-use qingjian_core::ModeKeys;
 use qingjian_platform::{Config, PAGE_KEY_OPTIONS};
 
 use crate::preferences::controls::{
@@ -17,9 +16,6 @@ use crate::preferences::target::PreferencesTarget;
 pub struct ShortcutsPage {
     /// 翻页键对。
     page_keys: Retained<NSPopUpButton>,
-
-    /// 表达式模式键。
-    expression: Retained<NSPopUpButton>,
 
     /// 删除候选的修饰键。
     delete_candidate: Retained<KeyRecorder>,
@@ -43,20 +39,6 @@ impl ShortcutsPage {
             layout,
             mtm,
             "选「，  。」时组句中敲逗号句号是翻页，不再是上屏加标点。",
-        );
-        let key_titles: Vec<String> = ModeKeys::CANDIDATES.iter().map(char::to_string).collect();
-        let expression = row_popup(
-            layout,
-            mtm,
-            "表达式模式键",
-            &key_titles,
-            Setting::ExpressionKey,
-            target,
-        );
-        note(
-            layout,
-            mtm,
-            "这个字母开头进表达式模式：v1+2 出 3。",
         );
         layout.space(GROUP_GAP);
         let delete_candidate = row_recorder(
@@ -91,7 +73,6 @@ impl ShortcutsPage {
         );
         Self {
             page_keys,
-            expression,
             delete_candidate,
         }
     }
@@ -102,13 +83,6 @@ impl ShortcutsPage {
         select(
             &self.page_keys,
             PAGE_KEY_OPTIONS.iter().position(|k| *k == pair),
-        );
-        let keys = config.shortcut.mode.sanitized();
-        select(
-            &self.expression,
-            ModeKeys::CANDIDATES
-                .iter()
-                .position(|k| *k == keys.expression),
         );
         let delete = config.shortcut.delete_keys();
         self.delete_candidate.show(&delete.key(), &delete.label());

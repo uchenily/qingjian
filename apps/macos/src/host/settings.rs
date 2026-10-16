@@ -187,17 +187,6 @@ impl Host {
                     self.settings.set_value("general", "preedit", mode.key());
                 }
             }
-            (Setting::ExpressionKey, SettingValue::Index(index)) => {
-                if let Some(&key) = ModeKeys::CANDIDATES.get(index) {
-                    let mut keys = config.shortcut.mode.sanitized();
-                    keys.expression = key;
-                    if keys.is_valid() {
-                        self.settings.set_value("shortcut", "expression", key.to_string());
-                    } else {
-                        tracing::warn!("表达式键与问字键不能相同，未改");
-                    }
-                }
-            }
             (Setting::DeleteCandidateKeys, SettingValue::Text(text)) => {
                 match text.parse::<Modifiers>() {
                     Ok(chosen) => {
@@ -215,11 +204,6 @@ impl Host {
                 let defaults = ShortcutConfig::default();
                 self.settings
                     .set_value("general", "page_keys", PAGE_KEY_OPTIONS[0]);
-                self.settings.set_value(
-                    "shortcut",
-                    "expression",
-                    defaults.mode.expression.to_string(),
-                );
                 self.settings.set_value(
                     "shortcut",
                     "delete_candidate",

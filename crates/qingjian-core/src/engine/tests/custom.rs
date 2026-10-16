@@ -96,24 +96,13 @@ fn punctuation_mode_does_not_change_custom_text() {
 }
 
 #[test]
-fn custom_exact_codes_override_mode_prefixes_but_not_longer_input() {
+fn custom_exact_codes_place_the_phrase_and_are_hidden_in_english_mode() {
     let mut e = engine();
     e.set_custom_phrases(vec![phrase("vv", 2, "固定"), phrase("uu", 1, "文本")])
         .unwrap();
     e.set_input("vv");
-    assert!(!e.expression_mode());
     let layout = CandidateLayout::new(e.query().unwrap().candidates.items, 9);
     assert_eq!(layout.candidate(1).unwrap().text, "固定");
-    e.set_input("vvv");
-    assert!(e.expression_mode());
-    assert!(
-        e.query()
-            .unwrap()
-            .candidates
-            .items
-            .iter()
-            .all(|c| c.text != "固定")
-    );
     e.set_input("uu");
     e.set_english_mode(true);
     assert!(

@@ -76,7 +76,7 @@ impl GeneralPage {
         note(
             layout,
             mtm,
-            "开双拼后 v、u、i 是音节键，表达式与问字模式只能用 ? 开头进；微软、搜狗方案的 ; 键是 ing。",
+            "开双拼后 v、u、i 是音节键；微软、搜狗方案的 ; 键是 ing。",
         );
         let punctuation = row_popup(
             layout,

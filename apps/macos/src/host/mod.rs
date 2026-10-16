@@ -25,8 +25,8 @@ use objc2::MainThreadMarker;
 use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
 use objc2_foundation::{NSProcessInfo, NSRect, NSString};
 use qingjian_core::{
-    Candidate, CandidateKind, Cell, EmojiTable, Engine, FuzzyRules, Language, ModeKeys,
-    NoInputLogger, ShuangpinScheme,
+    Candidate, CandidateKind, Cell, EmojiTable, Engine, FuzzyRules, Language, NoInputLogger,
+    ShuangpinScheme,
 };
 use qingjian_dictionary::{Dictionary, WordList};
 use qingjian_learning::{FrequencyLearner, InputLog, UsageStats, VocabularyBook};

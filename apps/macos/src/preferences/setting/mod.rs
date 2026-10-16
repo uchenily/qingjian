@@ -32,9 +32,6 @@ pub enum Setting {
     /// `[general] theme`，弹出菜单。
     Theme,
 
-    /// `[shortcut] expression`，弹出菜单 v / u / i。
-    ExpressionKey,
-
     /// `[fuzzy]` 里的一条规则，值是 [`FuzzyRules::NAMES`] 的下标。
     Fuzzy(usize),
 
@@ -121,7 +118,6 @@ impl Setting {
             Self::PageSize => 2,
             Self::PageKeys => 3,
             Self::Theme => 4,
-            Self::ExpressionKey => 5,
             Self::OpenConfigFile => 11,
             Self::Layout => 12,
             Self::Preedit => 13,
@@ -157,7 +153,6 @@ impl Setting {
             2 => Self::PageSize,
             3 => Self::PageKeys,
             4 => Self::Theme,
-            5 => Self::ExpressionKey,
             11 => Self::OpenConfigFile,
             12 => Self::Layout,
             13 => Self::Preedit,
@@ -208,7 +203,6 @@ mod tests {
             Setting::PageSize,
             Setting::PageKeys,
             Setting::Theme,
-            Setting::ExpressionKey,
             Setting::LocalModelEnabled,
             Setting::OpenConfigFile,
             Setting::Layout,

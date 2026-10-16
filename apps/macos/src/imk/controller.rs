@@ -191,11 +191,8 @@ impl QingjianInputController {
         // 修饰键 + 数字：删候选（缺省 ⇧）。
         // 只在组句中认：不在组句时 ⇧4 就是 `$`，得走下面的标点转换（中文模式出 ￥、⇧6 出 ……、⇧1 出 ！），
         // 以前在这里被截走后原样还给应用，全角转换就没机会做了。
-        // 表达式模式（`v2^3`）里 ⇧+数字打的是 `^ * ( )`，不当快捷键
         let composing = host::with(|h| !h.engine.composition().is_empty()).unwrap_or(false);
-        let expression = composing && host::with(|h| h.engine.expression_mode()).unwrap_or(false);
         if composing
-            && !expression
             && !pressed.is_empty()
             && let Some(digit) = digit_key(key)
         {
@@ -288,11 +285,7 @@ impl QingjianInputController {
             host::with(|h| h.engine.note_passthrough(c));
             return false;
         }
-        // 缓冲区为空时不再进问字模式（已移除）
-        let question = false;
         host::with(|h| h.engine.set_english_mode(false));
-        // 表达式模式（v 开头）：数字与运算符进缓冲区，不当选词 / 翻页键
-        let expression = composing && host::with(|h| h.engine.expression_mode()).unwrap_or(false);
         // 英文直输段（缓冲区里已有 `-` 这类字符）：可见字符一律追加，空格 / 回车整段原样上屏
         let raw = composing && host::with(|h| h.engine.raw_mode()).unwrap_or(false);
         // 微软 / 搜狗双拼的 `;` 是 ing 键：末尾有落单声母时进缓冲区，其他时候还是标点
@@ -301,17 +294,14 @@ impl QingjianInputController {
         let (page_previous, page_next) =
             host::with(|h| h.page_keys).unwrap_or(qingjian_platform::DEFAULT_PAGE_KEYS);
         // 组句中敲半角标点：进缓冲区，整段成为英文直输段（`hello,` `dui'ma?`），中文模式下也能打带标点的英文；
-        // 翻页键除外；⇧+数字（! @ # …）在前面已被删候选 / 译词键截走
+        // 翻页键除外；⇧+数字（! @ # …）在前面已被删候选键截走
         let punctuation = composing
-            && !question
-            && !expression
             && c.is_ascii_punctuation()
             && c != page_previous
             && c != page_next;
         if c.is_ascii_lowercase()
             || (composing && c == '\'')
             || semicolon
-            || (expression && qingjian_core::shortcut::is_expression_char(c))
             || (raw && c.is_ascii_graphic())
             || punctuation
         {

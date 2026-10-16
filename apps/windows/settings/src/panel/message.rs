@@ -10,7 +10,6 @@ pub(crate) enum Message {
     LearningLanguage(Option<usize>),
     PageSize(Option<f64>),
     Shuangpin(Option<usize>),
-    Zhuyin(bool),
     FullWidthPunctuation(bool),
     EnglishFullWidthPunctuation(bool),
 
@@ -25,9 +24,6 @@ pub(crate) enum Message {
 
     // 快捷键页
     PageKeys(Option<usize>),
-    ModeExpression(Option<usize>),
-    Translation(Option<usize>),
-    TranslationSecond(Option<usize>),
     DeleteCandidate(Option<usize>),
 
     // 模糊音页

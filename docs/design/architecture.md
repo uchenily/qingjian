@@ -73,14 +73,13 @@ qingjian-core
 ├── parser          # 拼音切分（全拼 / 简拼 / 双拼 / 模糊音）
 ├── candidate       # 候选数据模型（Candidate / Translation / Sense / PartOfSpeech / Language）；layout 是分页排布（本地候选 + 云端固定槽位），各平台壳共用
 ├── ranking         # 候选排序
-├── shortcut        # 快捷候选：日期 / 时间 / 星期、v 表达式模式（四则运算、中文数字），不查词库
+├── shortcut        # 快捷候选：日期 / 时间 / 星期（rq / sj / xq），不查词库
 ├── english         # 英文模式候选：词表精确词 / 前缀补全 / 一处编辑纠正（edit.rs），大小写跟着敲的走
 ├── sentence        # 离线整句转换：词图 + bigram Viterbi + 束搜索，LanguageModel trait（qingjian-lm 实现，缺省退化为一元），UserNgram 个人 n-gram（二元 + 三元），Context 上文（前两个词），
 │               #   SentenceScorer trait（qingjian-neural 实现）：convert_paths 出前 K 条路径，Engine（engine/rescoring）按 路径分 + λ·(神经分 − 静态分) 重排，异步时后台线程打分、壳停顿后取
 ├── emoji           # emoji 候选：EmojiTable（词 → emoji，Unicode CLDR 中文 annotations）
 ├── fuzzy           # 模糊音：FuzzyRules（配置 [fuzzy]）把每个音节扩展成多种写法，Expanded 借出给词库多写法查询
 ├── shuangpin       # 双拼：Scheme 四套方案的键位表，decode 把敲的键解成全拼（音节间带 '），Decoded 把上屏消耗换算回键数；切分之后全部复用全拼
-│                   # engine::ModeKeys（配置 [shortcut]）：表达式 / 问字前缀键，只能是 v / u / i；问字键后跟十六进制出码点字符
 ├── engine          # 对外门面：Engine，以及 Translator / Learner trait 与空实现
 └── storage         # 小文件落盘原语：write_atomic（临时文件 + fsync + 改名）、read_text_lossy；学习 crate 与配置都用它
 ```
@@ -319,9 +318,6 @@ CC-CEDICT 表（`dict-convert cedict`）保留为备用来源，覆盖面广但�
   **本地输入历史不当上下文**：它是跨应用拼起来的碎片，用它联想出来的全是噪音。
   上屏之后不联想：没有拼音约束的下文联想每次上屏多发一次请求，纯靠猜，已删除。
 - 联想不限语言：模型按光标附近文本的语言续写。
-- **问字模式**（`?` 开头）复用同一条通道：`PredictionRequest.kind = Question`，只带问题拼音（不带应用上下文、不要整句），
-  `qingjian-predict` 按 kind 换系统提示，回复是 `answers`（字 / 短答案 + 带声调读音，放 `CloudWord.reading`）；
-  Core 在问字模式下不做拼音校验、本地不出候选。
 - 发往云端的上下文默认关闭；开启后 Secure Input 绝不发送，前后观察长度可配置。
   上下文优先从应用读（IMK `attributedSubstringFromRange:`），读不到退回 Core 的本地输入历史（内存环形，可清除）。
 - 个人化优先用在线 n-gram，神经模型只做重排与离线联想，且要过评测门槛（见 roadmap Phase 7）。
