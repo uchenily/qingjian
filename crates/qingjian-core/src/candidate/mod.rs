@@ -3,7 +3,6 @@
 //! 翻译是候选词的 annotation：可选、单语言、最多 [`Translation::MAX_SENSES`] 条释义。
 //! 不要把它扩展成多语言并列的结构，那会破坏「一次只学一种语言」的产品原则。
 
-mod furigana;
 mod kind;
 mod language;
 mod layout;
@@ -14,7 +13,6 @@ mod translation;
 
 use serde::{Deserialize, Serialize};
 
-pub use furigana::{FuriganaSegment, furigana};
 pub use kind::CandidateKind;
 pub use language::{Language, UnknownLanguage};
 pub use layout::{CandidateLayout, Cell};
@@ -35,7 +33,7 @@ pub struct Candidate {
     /// 该候选对应的拼音音节，供平台层高亮已匹配部分。
     pub syllables: Vec<String>,
 
-    /// 读音（如日语假名），中文候选暂不使用。
+    /// emoji 候选来自哪个词（`smile` → 😀 时是 `smile`），候选窗口在译词前标出它；其余候选为 `None`。
     pub reading: Option<String>,
 
     /// 学习语言下的译文；查不到或尚未就绪时为 `None`。

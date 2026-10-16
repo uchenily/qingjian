@@ -1,4 +1,4 @@
-//! 释义表：`词\t[词性. ]译文[|读音]\t…` 的 TSV，或打包好的 `.qj`（mmap 零拷贝，启动不用解析 20 多万行）。
+//! 释义表：`词\t[词性. ]译文\t…` 的 TSV，或打包好的 `.qj`（mmap 零拷贝，启动不用解析 20 多万行）。
 
 mod entry_record;
 mod sense_record;
@@ -111,6 +111,7 @@ impl Glossary {
             }
         }
         for sense in senses.iter() {
+            // `reading_*` 是日语假名读音的位置，只支持中文 / 英文后新表恒为 0/0；旧表仍按原样校验。
             if !in_arena(sense.text_start, sense.text_len)
                 || !in_arena(sense.reading_start, sense.reading_len)
                 || !in_arena(sense.pos_start, sense.pos_len)
@@ -157,18 +158,16 @@ impl Glossary {
             let sense_start = senses.len() as u32;
             for sense in translation.senses() {
                 let (text_start, text_len) = push(&mut arena, &sense.text);
-                let (reading_start, reading_len) =
-                    push(&mut arena, sense.reading.as_deref().unwrap_or(""));
                 let (pos_start, pos_len) = push(
                     &mut arena,
                     sense.part_of_speech.map_or("", PartOfSpeech::abbreviation),
                 );
                 senses.push(SenseRecord {
                     text_start,
-                    reading_start,
+                    reading_start: 0,
                     pos_start,
                     text_len,
-                    reading_len,
+                    reading_len: 0,
                     pos_len,
                     reserved: 0,
                 });
@@ -253,12 +252,10 @@ impl Glossary {
             .iter()
             .filter_map(|r| {
                 let text = slice(r.text_start, r.text_len)?;
-                let reading = slice(r.reading_start, r.reading_len)?;
                 let pos = slice(r.pos_start, r.pos_len)?;
                 Some(Sense {
                     part_of_speech: pos.parse::<PartOfSpeech>().ok(),
                     text: text.to_owned(),
-                    reading: (!reading.is_empty()).then(|| reading.to_owned()),
                     fresh: false,
                 })
             })
@@ -267,14 +264,8 @@ impl Glossary {
     }
 }
 
-/// `v. develop` → 词性 + 译文；识别不出词性缩写时整段都是译文。译文后面 `|` 接的是读音（`n. 開発|かいはつ`）。
+/// `v. develop` → 词性 + 译文；识别不出词性缩写时整段都是译文。
 pub(crate) fn parse_sense(field: &str) -> Sense {
-    let (field, reading) = match field.split_once('|') {
-        Some((text, reading)) if !reading.trim().is_empty() => {
-            (text.trim(), Some(reading.trim().to_owned()))
-        }
-        _ => (field, None),
-    };
     if let Some((head, rest)) = field.split_once(' ')
         && head.ends_with('.')
         && let Ok(part_of_speech) = head.parse::<PartOfSpeech>()
@@ -282,14 +273,12 @@ pub(crate) fn parse_sense(field: &str) -> Sense {
         return Sense {
             part_of_speech: Some(part_of_speech),
             text: rest.trim().to_owned(),
-            reading,
             fresh: false,
         };
     }
     Sense {
         part_of_speech: None,
         text: field.to_owned(),
-        reading,
         fresh: false,
     }
 }
@@ -336,26 +325,6 @@ mod tests {
     }
 
     #[test]
-    fn japanese_senses_carry_kana_readings() {
-        let glossary = Glossary::parse(
-            Language::Japanese,
-            "开发\tv. 開発する|かいはつする\tn. 開発\n私\t私|わたし\n",
-        )
-        .unwrap();
-        let senses = glossary.translate("开发").unwrap().senses().to_vec();
-        assert_eq!(senses[0].text, "開発する");
-        assert_eq!(senses[0].reading.as_deref(), Some("かいはつする"));
-        let segments = senses[0].furigana();
-        assert_eq!(segments[0].text, "開発");
-        assert_eq!(segments[0].reading.as_deref(), Some("かいはつ"));
-        assert_eq!(segments[1].text, "する");
-        assert_eq!(senses[1].reading, None);
-        let plain = glossary.translate("私").unwrap();
-        assert_eq!(plain.senses()[0].part_of_speech, None);
-        assert_eq!(plain.senses()[0].reading.as_deref(), Some("わたし"));
-    }
-
-    #[test]
     fn rejects_line_without_senses() {
         let error = Glossary::parse(Language::English, "开发\n").unwrap_err();
         assert!(matches!(error, GlossaryError::Line { line: 1, .. }));
@@ -363,7 +332,7 @@ mod tests {
 
     #[test]
     fn qj_round_trip_keeps_every_sense() {
-        let source = "开发\tv. develop\tv. exploit\n你好\tint. hello\n開発\tn. 開発|かいはつ\n";
+        let source = "开发\tv. develop\tv. exploit\n你好\tint. hello\n中文\tn. Chinese\n";
         let glossary = Glossary::parse(Language::English, source).unwrap();
         let dir = std::env::temp_dir().join("qingjian-glossary-tests");
         std::fs::create_dir_all(&dir).unwrap();
@@ -380,12 +349,11 @@ mod tests {
         let mapped = Glossary::from_path(Language::English, &path).unwrap();
         std::fs::remove_file(&path).unwrap();
         assert_eq!(mapped.len(), 3);
-        for word in ["开发", "你好", "開発"] {
+        for word in ["开发", "你好", "中文"] {
             assert_eq!(mapped.translate(word), glossary.translate(word), "{word}");
         }
         assert_eq!(mapped.translate("没有"), None);
-        let senses = mapped.translate("開発").unwrap();
-        assert_eq!(senses.senses()[0].reading.as_deref(), Some("かいはつ"));
+        let senses = mapped.translate("中文").unwrap();
         assert_eq!(senses.senses()[0].part_of_speech, Some(PartOfSpeech::Noun));
     }
 }

@@ -9,7 +9,7 @@ use crate::GlossaryError;
 use crate::glossary::parse_sense;
 
 /// 个人释义表：释义兜底从云端写来的释义，一种学习语言一个文件（`user-glossary-<语言>.tsv`），
-/// 格式与随包释义表相同（`词\t[词性. ]译词[|读音]…`），用户可以手改。
+/// 格式与随包释义表相同（`词\t[词性. ]译词…`），用户可以手改。
 ///
 /// 加载按行容错（坏行警告跳过），读不了就只在内存里记；落盘走原子写。
 #[derive(Debug)]
@@ -97,7 +97,7 @@ impl PersonalGlossary {
 
     fn save_to(&self, path: &Path) -> Result<(), GlossaryError> {
         let mut text = format!(
-            "# 青简个人释义表（{}）：释义兜底从云端写来的，格式同随包释义表，可手改。词\\t[词性. ]译词[|读音]\n",
+            "# 青简个人释义表（{}）：释义兜底从云端写来的，格式同随包释义表，可手改。词\\t[词性. ]译词\n",
             self.language.code()
         );
         let mut words: Vec<&String> = self.entries.keys().collect();
@@ -115,16 +115,13 @@ impl PersonalGlossary {
     }
 }
 
-/// `词性. 译词|读音`，与 [`parse_sense`] 互逆。
+/// `词性. 译词`，与 [`parse_sense`] 互逆。
 fn format_sense(sense: &Sense) -> String {
     let mut out = String::new();
     if let Some(pos) = sense.part_of_speech {
         let _ = write!(out, "{pos} ");
     }
     out.push_str(&sense.text);
-    if let Some(reading) = &sense.reading {
-        let _ = write!(out, "|{reading}");
-    }
     out
 }
 
@@ -157,18 +154,12 @@ mod tests {
     use super::*;
     use qingjian_core::PartOfSpeech;
 
-    fn translation(
-        language: Language,
-        pos: Option<PartOfSpeech>,
-        text: &str,
-        reading: Option<&str>,
-    ) -> Translation {
+    fn translation(language: Language, pos: Option<PartOfSpeech>, text: &str) -> Translation {
         Translation::new(
             language,
             vec![Sense {
                 part_of_speech: pos,
                 text: text.to_owned(),
-                reading: reading.map(str::to_owned),
                 fresh: false,
             }],
         )
@@ -178,35 +169,25 @@ mod tests {
     fn round_trips_through_the_file_in_glossary_format() {
         let dir = std::env::temp_dir().join(format!("qingjian-personal-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("user-glossary-ja.tsv");
-        std::fs::write(&path, "# 头\n开放\tadj. 開放的|かいほうてき\n坏行\n").unwrap();
-        let mut glossary = PersonalGlossary::open(Language::Japanese, &path);
+        let path = dir.join("user-glossary-en.tsv");
+        std::fs::write(&path, "# 头\n开放\tadj. open\n坏行\n").unwrap();
+        let mut glossary = PersonalGlossary::open(Language::English, &path);
         assert_eq!(glossary.len(), 1);
-        assert_eq!(
-            glossary.translate("开放").unwrap().senses()[0]
-                .reading
-                .as_deref(),
-            Some("かいほうてき")
-        );
+        assert_eq!(glossary.translate("开放").unwrap().senses()[0].text, "open");
         glossary.insert(
             "开发",
-            translation(
-                Language::Japanese,
-                Some(PartOfSpeech::Verb),
-                "開発する",
-                Some("かいはつする"),
-            ),
+            translation(Language::English, Some(PartOfSpeech::Verb), "develop"),
         );
         // 语言不对的不收
-        glossary.insert("测试", translation(Language::English, None, "test", None));
+        glossary.insert("测试", translation(Language::Chinese, None, "test"));
         assert_eq!(glossary.len(), 2);
         glossary.save().unwrap();
         let text = std::fs::read_to_string(&path).unwrap();
-        assert!(text.ends_with("开发\tv. 開発する|かいはつする\n开放\tadj. 開放的|かいほうてき\n"));
-        let reloaded = PersonalGlossary::open(Language::Japanese, &path);
+        assert!(text.ends_with("开发\tv. develop\n开放\tadj. open\n"));
+        let reloaded = PersonalGlossary::open(Language::English, &path);
         assert_eq!(
             reloaded.translate("开发").unwrap().senses()[0].text,
-            "開発する"
+            "develop"
         );
         std::fs::remove_dir_all(&dir).unwrap();
     }

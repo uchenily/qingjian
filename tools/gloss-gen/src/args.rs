@@ -14,7 +14,7 @@ pub enum Command {
     /// 从一元词频表挑词，分批问模型，结果追加到 JSONL（可中断续跑）
     Generate(GenerateArgs),
 
-    /// 把 JSONL 导出成 glossary-en.tsv / glossary-ja.tsv
+    /// 把 JSONL 导出成 glossary-en.tsv
     Export(ExportArgs),
 
     /// 给多音字词标拼音：词表一行一个词，结果追加到 JSONL（可中断续跑），`dict-convert lexicon --pinyin` 读它
@@ -177,7 +177,7 @@ pub struct ExportArgs {
     #[arg(long, default_value = "data/generated/gloss-llm.jsonl")]
     pub input: PathBuf,
 
-    /// 输出目录，写 glossary-en.tsv 与 glossary-ja.tsv
+    /// 输出目录，写 glossary-en.tsv
     #[arg(long, default_value = "data/generated")]
     pub out_dir: PathBuf,
 }

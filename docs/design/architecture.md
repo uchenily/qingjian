@@ -59,7 +59,7 @@ qingjian/
 │   ├── gloss-gen/              # LLM 批量生成释义表与多音字标注
 │   └── corpus/                 # 语料预处理脚本（uv）
 │
-├── assets/                     # 随仓库的产品数据源：词库源、释义表、emoji 表、词汇等级表（levels/，CEFR-J / Octanove / JLPT）、图标、样例
+├── assets/                     # 随仓库的产品数据源：词库源、释义表、emoji 表、词汇等级表（levels/，CEFR-J / Octanove）、图标、样例
 ├── data/                       # gitignore：语料、Unihan、生成物 data/generated/
 ├── docs/
 └── README.md
@@ -150,7 +150,7 @@ apps/*                     （组装：Engine::new(dict).with_translator(..).wit
 
 `apps/cli` 是 Phase 1 的测试壳：`cargo run -p qingjian-cli -- kaifa` 直接查询，
 不带参数进入交互模式（拼音查询、序号上屏、`:q` 退出），`--user-dict` 指定用户词频文件，
-`--language en|ja|es` 或环境变量 `QINGJIAN_LEARNING_LANGUAGE` 选学习语言。
+`--language en` 或环境变量 `QINGJIAN_LEARNING_LANGUAGE` 选学习语言。
 `--typing` 是性能测试模式：把输入当一键一键敲进去，每个前缀查一次并标注译文，一行一键打印各阶段耗时
 （这是输入法每键的真实工作量，联想在后台线程不算），启动日志里带各数据文件的加载耗时。
 性能改动要用 release 构建跑它看数字，目标每键 10 ms 以内。
@@ -239,9 +239,8 @@ bigram 语言模型 + Viterbi，加上简拼、模糊音、双拼。没有整句
 翻译走本地查表，运行时不调网络。这样天然满足「翻译不阻塞候选」的约束。
 随包的释义表由 `tools/gloss-gen` 用 LLM 离线批量生成（2026-09-04 定的路线，不用有道等网页接口：逆向接口不稳，
 攒下来的结果再分发有版权问题；LLM 输出许可干净）：从我们自己统计的一元词频表挑常用词（次数 ≥ 200、不超过 4 个字，约 6.4 万词），
-每个词一次请求同时要「词性 + 英文译词 + 日文译词与假名读音」，结果 JSONL 可续跑，`export` 转成 `glossary-en.tsv` / `glossary-ja.tsv`。
-释义格式 `词\t词性. 译词\t词性. 译词`，日文译词后 `|假名`；`Sense.reading` 存整词假名，`Sense::furigana()`（Core `candidate::furigana`）用译词里的假名段当锚点把读音对到各段汉字上，
-候选窗口按 `開発(かいはつ)する` 显示，假名淡色；纯假名 / 片假名词不注，对不上就整体注在后面。不用罗马音。
+每个词一次请求要「词性 + 英文译词」，结果 JSONL 可续跑，`export` 转成 `glossary-en.tsv`。
+释义格式 `词\t词性. 译词\t词性. 译词`，候选窗口按 `v. develop · v. exploit` 显示，最多两条。
 CC-CEDICT 表（`dict-convert cedict`）保留为备用来源，覆盖面广但没有词性、释义偏长。
 运行时查不到的词走同一条 LLM 通道补进用户目录的个人释义表（**释义兜底**）：Core `GlossFiller` trait 与 `Predictor` 分开注入——联想是「最新请求优先」、
 防抖会丢旧请求，兜底恰恰要每个词都问到、慢点没关系。词库词 / 云端词**上屏后**发现随包表没有就入队（只在云联想开着时，发出去的只有那个词），

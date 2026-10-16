@@ -43,7 +43,6 @@ mod tests {
             .map(|text| Sense {
                 part_of_speech: Some(PartOfSpeech::Verb),
                 text: text.to_owned(),
-                reading: None,
                 fresh: false,
             })
             .collect();

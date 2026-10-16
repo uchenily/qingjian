@@ -16,8 +16,7 @@
 - [x] 简拼（声母缩写 `kf` → 开发，与全拼混用，marked text 自动补 `'`）
 - [x] 开发测试词库：曾用雾凇拼音（GPL，不可发布）；2026-09-05 起换成自建词库，见 Phase 2 末尾「产品词库」
 - [x] 中→英释义：`tools/dict-convert` 从 CC-CEDICT 生成 11.5 万条（CC BY-SA 4.0，可发布）
-- [x] 带词性的中英 / 中日释义表：`tools/gloss-gen` 用 LLM 批量生成（2026-09-05 起覆盖整个自建词库 23.9 万词，词性 + 英文译词 + 日文译词与假名，`assets/glossary/`），
-  `Sense.reading` + 汉字注平假名（`candidate::furigana`）；取代 CC-CEDICT 表做随包数据
+- [x] 带词性的中英释义表：`tools/gloss-gen` 用 LLM 批量生成（2026-09-05 起覆盖整个自建词库 23.9 万词，词性 + 英文译词，`assets/glossary/`）；取代 CC-CEDICT 表做随包数据
 - [x] 上屏候选的译文（`Engine::commit_translation`）：Linux 右箭头上屏高亮候选的第一条译词
 - [x] 整段切不动时取能切分的最长前缀出候选，剩余字母作为未切分尾部保留（`kaifv` → `kai'f'v`）
 - [x] 整句转换（bigram + Viterbi），含简拼整句（`wxqcf` → 我想去蹭饭 / `jttqhh` → 今天天气很好）
@@ -124,19 +123,18 @@
 
 ## Phase 3 — Translation
 
-- [x] Candidate Translation API（`Translator` trait，`Engine::annotate` 候选生成后异步补译文；`Sense` 词性 + 译文 + 读音）
-- [x] 中文 → English、中文 → 日本語：`tools/gloss-gen` LLM 批量生成 6.4 万常用词（词性、译词、日文假名），随包表；日文按汉字段注平假名
-- [x] 本地词典：`Glossary` 内存查表，格式 `词\t词性. 译词[|假名]`；CC-CEDICT 表保留为备用来源
+- [x] Candidate Translation API（`Translator` trait，`Engine::annotate` 候选生成后异步补译文；`Sense` 词性 + 译文）
+- [x] 中文 → English：`tools/gloss-gen` LLM 批量生成 6.4 万常用词（词性、译词），随包表
+- [x] 本地词典：`Glossary` 内存查表，格式 `词\t词性. 译词`；CC-CEDICT 表保留为备用来源
 - [x] 翻译语言设置：`[general] learning_language`，菜单与偏好设置只列打进包里有释义表的语言
 - [x] 上屏候选的译文：Linux 右箭头上屏高亮候选的第一条译词
-- [x] 释义表随仓库发布（`assets/glossary/`，2026-09-05）：中→英 / 日覆盖整个自建词库 24.9 万词，多字词 91.6% 有英文释义、98% 日文；
-  英→中 4.5 万词（wordfreq ≥ 2500 + 技术词），英文候选右侧显示中文（Engine 按候选种类查表）；三张表都进 `.qj`
+- [x] 释义表随仓库发布（`assets/glossary/`，2026-09-05）：中→英覆盖整个自建词库 24.9 万词，多字词 91.6% 有英文释义；
+  英→中 4.5 万词（wordfreq ≥ 2500 + 技术词），英文候选右侧显示中文（Engine 按候选种类查表）；两张表都进 `.qj`
 - [x] 上屏译词：Linux 右箭头上屏高亮候选的第一条译词；⌃⌥T 翻译应用里选中的文字（云服务）
 - [x] 释义兜底（2026-09-06）：Core `GlossFiller` trait（与 `Predictor` 分开：独立线程、攒批、不丢请求），随包表查不到的词库词 / 云端词**上屏后**入队，
   `qingjian-predict::CloudGlossFiller` 攒 1.5 秒或 8 个词发一次（提示词与 gloss-gen 同源，只要当前学习语言），结果经 `Translator::learn` 进
   `qingjian-translate::PersonalGlossary`（`user-glossary-<语言>.tsv`，格式同随包表，可手改，`LayeredTranslator` 个人表优先），随 flush 落盘；
   壳每秒 `Engine::poll_glosses`；随云联想开关一起开，发出去的只有那个词
-- [ ] JMdict 校对假名与日文词性（等级标签已做，见 Phase 4）
 
 ## Phase 4 — Learning
 
@@ -152,8 +150,8 @@
   候选里橙色画译词，看熟了变回灰。「看到」按上屏那一刻屏幕上那一页算（壳 `Engine::note_displayed`），上屏带译词的候选记「上屏过」，⌥+数字 打出译词记「用过」；
   `qingjian-learning::VocabularyBook` 一个译词一行 `user-vocab.tsv`（语言 / 译词 / 看到轮次 / 上屏 / 用过 / 首见 / 末见），只记译词与次数
 - [x] 学习词汇统计（2026-09-06）：偏好设置「统计」页词汇块：见过 / 看熟 / 上屏过 / 打出过 / 本周新见的译词数（`VocabularySummary`），
-  再按等级分行（词表总数 / 见过 / 看熟 / 上屏过）：英文 CEFR A1–C2（CEFR-J 1.5 + Octanove，8,845 词）、日文 JLPT N5–N1（Tanos 经 elzup，7,757 词），
-  `qingjian-translate::LevelTable` 读 `assets/levels/levels-{en,ja}.tsv`（`tools/corpus/levels.py` 生成），`VocabularyBook::with_levels`；等级不进候选窗口
+  再按等级分行（词表总数 / 见过 / 看熟 / 上屏过）：英文 CEFR A1–C2（CEFR-J 1.5 + Octanove，8,845 词），
+  `qingjian-translate::LevelTable` 读 `assets/levels/levels-en.tsv`（`tools/corpus/levels.py` 生成），`VocabularyBook::with_levels`；等级不进候选窗口
 - [ ] 可选复习功能
 
 ## Phase 5 — Cross-platform
@@ -194,7 +192,7 @@ Core 永远不联网。第一个实现接 DeepSeek（OpenAI 兼容接口），�
 - [x] 语料挖新词（`dict-convert mine`）：分词落成连续单字的段按子串计数，虚词规则 + 相邻字对 PMI≥3 过滤（2026-09-07 从会话脚本进工具，`oov_filter.rs`），`lexicon --extra-words` 并入词库
 - [x] 多词库与词库管理（2026-09-05）：Engine 附加词库列表；用户目录 `dicts/` + `[dictionaries] disabled`；偏好设置「词库」页导入（TSV / Rime yaml / .qj → .qj）、开关、移除
 - [x] 翻译选中的文字（2026-09-05）：⌃⌥T 把应用里的选区交给云端翻译，译文在候选窗口里回车替换、Esc 保留；快捷键可改；
-  双向：中文选区译成学习语言，外文（拉丁字母 / 假名）选区译回中文，方向按字符统计定（`translation_target`）
+  双向：中文选区译成学习语言，外文（拉丁字母）选区译回中文，方向按字符统计定（`translation_target`）
 - [x] 输入历史落盘与清除（2026-09-05）：`input-log.jsonl` + 偏好设置「高级」页开关 / 清空（查看界面没做，文件是 jsonl 直接看）
 - [ ] 密钥进钥匙串（等签名定了再做）；云联想按应用禁用
 - [ ] 请求量控制：按分钟限流、统计本月请求数并显示

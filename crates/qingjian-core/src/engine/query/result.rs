@@ -47,10 +47,10 @@ pub struct Query {
     /// 生效的拼写纠正：`segmentations` 与候选都来自纠正后的拼音，`text` 仍是用户敲的。
     pub correction: Option<Correction>,
 
-    /// 双拼 / 注音开着：`segmentations` 是解出来的拼音，`text` 是敲的键，两者长度对不上。
+    /// 双拼开着：`segmentations` 是解出来的拼音，`text` 是敲的键，两者长度对不上。
     pub decoded_keys: bool,
 
-    /// 开启双拼或注音时的显示字串（如 "ㄅㄨˋ"）。如果有此值，preedit 就优先显示它，而不是拼音。
+    /// 双拼下敲的键按音节连好的显示字串；有它就优先显示它，而不是解出来的拼音。
     pub typed_display: Option<String>,
 
     /// 整句候选经过了神经重排：第一整句候选的顺序被神经模型调整过，壳可据此加标识。

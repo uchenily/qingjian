@@ -15,8 +15,6 @@ const COLUMNS: [&str; 4] = ["汉字", "中文词", "英文词", "上屏次数"];
 fn language_name(language: Language) -> &'static str {
     match language {
         Language::English => "英语",
-        Language::Japanese => "日语",
-        Language::Spanish => "西班牙语",
         Language::Chinese => "中文",
     }
 }
@@ -105,7 +103,7 @@ pub(crate) fn view(settings: &Settings, _context: &mut ViewContext<Settings>) ->
 /// 有等级表才显示，一级一行。
 fn level_block(vocabulary: &VocabularySummary) -> View {
     if vocabulary.levels.is_empty() {
-        return note("装了词汇等级表后，这里按 CEFR / JLPT 等级列词汇分布。");
+        return note("装了词汇等级表后，这里按 CEFR 等级列词汇分布。");
     }
     let mut rows: Vec<View> = Vec::with_capacity(vocabulary.levels.len() + 1);
     rows.push(table_row(

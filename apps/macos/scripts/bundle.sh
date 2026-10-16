@@ -68,7 +68,7 @@ cp -R apps/macos/resources/*.lproj "$APP/Contents/Resources/"
 cp assets/sample/*.tsv "$APP/Contents/Resources/"
 # emoji 表（Unicode CLDR，可发布）
 cp assets/emoji/*.tsv "$APP/Contents/Resources/"
-# 词汇等级表（CEFR-J / Octanove / JLPT，见 assets/levels/README.md），「统计」页按级数词汇
+# 词汇等级表（CEFR-J / Octanove，见 assets/levels/README.md），「统计」页按级数词汇
 cp assets/levels/levels-*.tsv "$APP/Contents/Resources/"
 if [[ -f data/generated/dict.tsv || -f data/generated/dict.qj ]]; then
   # 词库与语言模型打成 .qj（mmap 直接用），TSV 比 .qj 新时重新打包；只有 .qj（CI 从数据包解出来的）就直接用
@@ -101,7 +101,7 @@ if [[ -f data/generated/dict.tsv || -f data/generated/dict.qj ]]; then
     echo "打包本地整句模型：$model_dir/model.qjm"
   fi
   # 释义表打成 .qj（TSV 比 .qj 新时重打），英文词表仍是 TSV
-  for lang in en ja zh; do
+  for lang in en zh; do
     src="assets/glossary/glossary-$lang.tsv"
     out="data/generated/glossary-$lang.qj"
     [[ -f "$src" ]] || continue

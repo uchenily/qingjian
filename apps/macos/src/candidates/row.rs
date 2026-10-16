@@ -30,7 +30,7 @@ pub struct Row {
 impl Row {
     pub fn from_candidate(position: usize, candidate: &Candidate) -> Self {
         let mut annotation = Vec::new();
-        // 读音（问字模式答案的带声调拼音）放在最前
+        // emoji 候选来自哪个词，放在最前
         if let Some(reading) = &candidate.reading {
             annotation.push((reading.clone(), Tone::Gloss));
         }
@@ -42,18 +42,12 @@ impl Row {
                 if let Some(pos) = sense.part_of_speech {
                     annotation.push((format!("{pos} "), Tone::Faint));
                 }
-                // 日文译词按汉字段注平假名（開発(かいはつ)する），假名淡色
                 let tone = if sense.fresh {
                     Tone::Fresh
                 } else {
                     Tone::Gloss
                 };
-                for segment in sense.furigana() {
-                    annotation.push((segment.text, tone));
-                    if let Some(reading) = segment.reading {
-                        annotation.push((format!("({reading})"), Tone::Faint));
-                    }
-                }
+                annotation.push((sense.text.clone(), tone));
             }
         }
         Self {

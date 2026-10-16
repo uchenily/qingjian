@@ -22,7 +22,7 @@ TSV 解析、查询与生成工具把 `lue` / `nue` 统一成 `lve` / `nve`。
 
 ## crates/qingjian-translate
 
-`Glossary`，本地 TSV 释义表（词性 + 译文）；`LevelTable`，词汇等级表（`assets/levels/levels-{en,ja}.tsv`，CEFR A1–C2 / JLPT N5–N1，
+`Glossary`，本地 TSV 释义表（词性 + 译文）；`LevelTable`，词汇等级表（`assets/levels/levels-en.tsv`，CEFR A1–C2，
 `uv run tools/corpus/levels.py` 从 `data/levels/` 的原始 CSV 生成，来源与许可见 `assets/levels/README.md`），「统计」页按级数词汇用，不进候选。
 
 ## crates/qingjian-learning
@@ -141,7 +141,7 @@ fcitx5 addon：C++ shim（`shim/`，实现 `fcitx::InputMethodEngine`）+ Rust c
 ## tools/gloss-gen
 
 用 LLM 批量生成释义表：`cargo run --release -p qingjian-gloss-gen -- generate`（密钥读 `QINGJIAN_API_KEY`，结果 JSONL 在 `data/generated/`，不进 git、可续跑，`--limit 80` 试跑）
-再 `... export`（写 `glossary-{en,ja}.tsv`，产品数据在 `assets/glossary/`，见那里的 README；格式 `词\t词性. 译词[|假名]`）。CLI 与 bundle.sh 用的就是这两个文件。
+再 `... export`（写 `glossary-en.tsv`，产品数据在 `assets/glossary/`，见那里的 README；格式 `词\t词性. 译词`）。CLI 与 bundle.sh 用的就是它。
 
 ## tools/dict-convert
 

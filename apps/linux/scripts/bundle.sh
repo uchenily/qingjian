@@ -103,7 +103,7 @@ if [[ -f data/generated/dict.qj || -f data/generated/dict.tsv ]]; then
     # 语言模型
     [[ -f data/generated/lm.qj ]] && cp data/generated/lm.qj "$DATA_DIR/"
     # 释义表
-    for lang in en ja zh; do
+    for lang in en zh; do
         [[ -f data/generated/glossary-$lang.qj ]] && cp data/generated/glossary-$lang.qj "$DATA_DIR/"
     done
     # 英文词表

@@ -125,7 +125,6 @@ impl Translator for FixedTranslator {
                 vec![Sense {
                     part_of_speech: Some(PartOfSpeech::Verb),
                     text: "develop".into(),
-                    reading: None,
                     fresh: false,
                 }],
             )

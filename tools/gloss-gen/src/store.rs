@@ -108,7 +108,7 @@ pub fn read_entries<T: Keyed>(path: &Path) -> Result<Vec<T>, GlossError> {
     Ok(entries)
 }
 
-/// 导出成输入法加载的两张表：`词\t词性 译词\t词性 译词`，日文译词后面接 `|假名`。同一个词以最后一条为准，按词排序。
+/// 导出成输入法加载的 `glossary-en.tsv`：`词\t词性 译词\t词性 译词`。同一个词以最后一条为准，按词排序。
 pub fn export(input: &Path, out_dir: &Path) -> Result<(), GlossError> {
     let mut latest: BTreeMap<String, GlossEntry> = BTreeMap::new();
     for entry in read_entries::<GlossEntry>(input)? {
@@ -116,16 +116,11 @@ pub fn export(input: &Path, out_dir: &Path) -> Result<(), GlossError> {
     }
     std::fs::create_dir_all(out_dir)?;
     let mut english = BufWriter::new(File::create(out_dir.join("glossary-en.tsv"))?);
-    let mut japanese = BufWriter::new(File::create(out_dir.join("glossary-ja.tsv"))?);
     writeln!(
         english,
         "# 由 qingjian-gloss-gen 生成（LLM）。词\t[词性. ]译词\t[词性. ]译词"
     )?;
-    writeln!(
-        japanese,
-        "# 由 qingjian-gloss-gen 生成（LLM）。词\t[词性. ]译词|假名\t[词性. ]译词|假名"
-    )?;
-    let (mut en_count, mut ja_count) = (0, 0);
+    let mut en_count = 0;
     for entry in latest.values() {
         let pos = entry
             .pos
@@ -140,24 +135,11 @@ pub fn export(input: &Path, out_dir: &Path) -> Result<(), GlossError> {
             writeln!(english)?;
             en_count += 1;
         }
-        if !entry.ja.is_empty() {
-            write!(japanese, "{}", entry.word)?;
-            for sense in &entry.ja {
-                match &sense.reading {
-                    Some(reading) => write!(japanese, "\t{pos}{}|{reading}", sense.text)?,
-                    None => write!(japanese, "\t{pos}{}", sense.text)?,
-                }
-            }
-            writeln!(japanese)?;
-            ja_count += 1;
-        }
     }
     english.flush()?;
-    japanese.flush()?;
     tracing::info!(
         words = latest.len(),
         english = en_count,
-        japanese = ja_count,
         out_dir = %out_dir.display(),
         "导出完成"
     );

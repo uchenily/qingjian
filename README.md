@@ -24,7 +24,7 @@ https://github.com/user-attachments/assets/d145fde9-a641-4543-8b15-dd7a2685de3d
 
 候选词仍然是输入的主体，翻译只作为较小、较浅的辅助信息存在。
 
-**一次只学习一种语言。** 青简不会在一个候选项旁边同时塞入英语、日语、韩语、德语。保持输入体验干净，比堆砌信息更重要。
+**一次只学习一种语言。** 一个候选旁边只有一条译词，不同时显示几种语言。保持输入体验干净，比堆砌信息更重要。
 
 - 官网：[qingjian.app](https://qingjian.app)
 - 下载：[qingjian.app/download](https://qingjian.app/download)（macOS、Windows）
@@ -67,19 +67,12 @@ Primary Language: 中文
 Learning Language: English
 ```
 
-切换学习语言为日语后，同样的候选会显示：
+候选旁显示学习语言的译词：
 
 ```text
-开发                開発
-学习                学習
-语言                言語
-```
-
-未来支持其他输入模式后，也可以反过来：
-
-```text
-こんにちは          你好
-日本語              日语
+开发                v. develop · v. exploit
+学习                v. study · v. learn
+语言                n. language
 ```
 
 核心原则不变：**一个候选词，只显示一种辅助语言。**

@@ -35,7 +35,7 @@ pub(crate) struct Host {
 }
 
 /// 随包释义表覆盖的语言（与 macOS 一致；有表才算）。
-const GLOSSARY_LANGUAGES: [Language; 2] = [Language::English, Language::Japanese];
+const GLOSSARY_LANGUAGES: [Language; 1] = [Language::English];
 
 /// 初始化：读配置、装日志、装配 Engine、建分派器。
 pub(crate) fn init() -> Result<Host, InitError> {

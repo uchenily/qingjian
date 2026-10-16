@@ -97,9 +97,9 @@ collection behavior 是 CanJoinAllSpaces + FullScreenAuxiliary + Stationary。�
 | Tab | 有整句补全（云联想）时接受它；没有则翻页 |
 | 修饰键 + 数字（⇧ 删候选） | **只在组句中认**。不在组句时 ⇧4 就是普通的 `$`，走中文标点规则出 ￥（⇧1 ！、⇧6 ……、⇧9 ⇧0 （ ））；曾经在这里被截走后原样还给应用，全角转换就漏了 |
 | 按住 Shift 打的大写字母 | 先把拼音原样上屏，再原样交给应用（临时打英文） |
-| →（右箭头，Linux） | 上屏高亮候选的**第一条译词**而不是候选本身（如「英语 n. English」上屏 `English`）；日文不带注音；学习与拼音消耗同选了那个候选。候选没有译词时退回移动光标。Core `Engine::commit_translation`，Linux 壳在 `dispatch::key` 的右箭头分支调 |
+| →（右箭头，Linux） | 上屏高亮候选的**第一条译词**而不是候选本身（如「英语 n. English」上屏 `English`）；学习与拼音消耗同选了那个候选。候选没有译词时退回移动光标。Core `Engine::commit_translation`，Linux 壳在 `dispatch::key` 的右箭头分支调 |
 | ⇧ + 1–9（可改） | **删掉当前页第 N 个候选**：自己造的词、云端选过的词（用户词）整个删掉，本地不再出；词库里的词清掉对它的全部学习（选择次数、各输入串下的选择、个人 n-gram 里与它有关的转移），回到原来的排序；整句 / 快捷候选 / emoji 没什么可删。删完重新查一遍，结果那句话（「已删除用户词「X」」）灰字显示在拼音行右侧，敲下一键就没了；那格没有候选就吞掉按键。修饰键在 `[shortcut] delete_candidate`（缺省 ⇧，为空时退回缺省）。代价是组句中 ⇧1 不再是「上屏 + ！」，要先上屏；Core `Engine::forget` → `Learner::forget` / `forget_english` |
-| ⌃⌥T（可改） | **翻译选中的文字**：不在组句中、应用里有选区（≤ 500 字符）时，把选区交给云端翻译（`PredictionKind::Translate`，`Engine::request_translation`）：选区主要是汉字译成学习语言，有假名或拉丁字母不少于汉字就译成中文（Core `prediction::translation_target` 按字符统计定方向，提示词兜底「已是目标语言就译成中文」），候选窗口先显示「翻译中…」，译文到了作为唯一候选显示；回车 / 空格 / 1 用译文替换选区（`insertText:replacementRange:`），Esc 保留原文，其他键放弃并照常交给应用。云服务关着、密码框、应用不支持读选区（部分 Electron）时快捷键原样交回应用。快捷键在 `[shortcut] translate_selection`（修饰键 + 一个字母或数字，任意组合，偏好设置「快捷键」页录制；缺省 ⌃⌥T 避开了 ⌘T 这类应用常用键） |
+| ⌃⌥T（可改） | **翻译选中的文字**：不在组句中、应用里有选区（≤ 500 字符）时，把选区交给云端翻译（`PredictionKind::Translate`，`Engine::request_translation`）：选区主要是汉字译成学习语言，拉丁字母不少于汉字就译成中文（Core `prediction::translation_target` 按字符统计定方向，提示词兜底「已是目标语言就译成中文」），候选窗口先显示「翻译中…」，译文到了作为唯一候选显示；回车 / 空格 / 1 用译文替换选区（`insertText:replacementRange:`），Esc 保留原文，其他键放弃并照常交给应用。云服务关着、密码框、应用不支持读选区（部分 Electron）时快捷键原样交回应用。快捷键在 `[shortcut] translate_selection`（修饰键 + 一个字母或数字，任意组合，偏好设置「快捷键」页录制；缺省 ⌃⌥T 避开了 ⌘T 这类应用常用键） |
 
 ### 整句转换（离线）
 
@@ -164,7 +164,7 @@ Alacritty / kitty / VS Code / Cursor / Zed / JetBrains 全家 / MacVim / Sublime
   每个词最多 2 个、一次最多 3 个，`CandidateKind::Emoji`，上屏按那个词的音节消耗拼音（英文词带出的对应整段输入）、不记学习。
   数据是 Unicode CLDR 中文与英文 annotations（`assets/emoji/emoji-zh.tsv`、`emoji-en.tsv`，Unicode License v3，可发布，加载时合成一张表），
   `dict-convert emoji --language zh|en` 生成：单字词只收名字里含这个字的 emoji，名字里含这个词的靠前、名字越短越靠前。
-  日文表要等有日语输入模式再说。
+
 
 ### 模糊音（默认全关，`config.toml` 的 `[fuzzy]`）
 

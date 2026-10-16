@@ -18,8 +18,8 @@ use crate::frame::{Frame, FrameBuilder};
 use crate::session::{Session, kind_of};
 
 /// 把候选的译文拼成一条纯文本 annotation，与 macOS / Windows 壳的 `candidates::row` 对齐：
-/// 读音 · 词性 译文(假名) · 词性 译文(假名)。fcitx5 的 `CandidateWord::setComment` 只接受纯文本，
-/// 色调分层（生词强调、词性淡色）无法表达，但内容（多条释义、词性、furigana 注音）完整保留。
+/// 读音 · 词性 译文 · 词性 译文。fcitx5 的 `CandidateWord::setComment` 只接受纯文本，
+/// 色调分层（生词强调、词性淡色）无法表达，但内容（多条释义、词性）完整保留。
 fn annotation_text(candidate: &qingjian_core::Candidate) -> Option<String> {
     let mut parts: Vec<String> = Vec::new();
     if let Some(reading) = &candidate.reading {
@@ -33,12 +33,7 @@ fn annotation_text(candidate: &qingjian_core::Candidate) -> Option<String> {
             if let Some(pos) = sense.part_of_speech {
                 parts.push(format!("{pos} "));
             }
-            for segment in sense.furigana() {
-                parts.push(segment.text.clone());
-                if let Some(reading) = segment.reading {
-                    parts.push(format!("({reading})"));
-                }
-            }
+            parts.push(sense.text.clone());
         }
     }
     if parts.is_empty() {

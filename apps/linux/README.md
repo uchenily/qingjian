@@ -126,7 +126,7 @@ tar -xzf /tmp/qingjian-data.tar.gz -C data/generated
 |------|------|
 | `dict.qj` | 基础词库（打包格式，启动近零耗时） |
 | `lm.qj` | 二元语言模型（整句排序用） |
-| `glossary-zh.qj` / `glossary-en.qj` / `glossary-ja.qj` | 释义表 |
+| `glossary-zh.qj` / `glossary-en.qj` | 释义表 |
 | `english.tsv` | 英文词表 |
 | `dicts/` | 领域词库（额外词库） |
 

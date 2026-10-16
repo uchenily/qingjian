@@ -159,20 +159,9 @@ fn format_candidate(candidate: &Candidate, width: usize, rescored: bool) -> Stri
         .map(|t| {
             t.senses()
                 .iter()
-                .map(|s| {
-                    // 日文译词按汉字段注平假名：開発(かいはつ)する
-                    let text: String = s
-                        .furigana()
-                        .iter()
-                        .map(|segment| match &segment.reading {
-                            Some(reading) => format!("{}({reading})", segment.text),
-                            None => segment.text.clone(),
-                        })
-                        .collect();
-                    match s.part_of_speech {
-                        Some(pos) => format!("{pos} {text}"),
-                        None => text,
-                    }
+                .map(|s| match s.part_of_speech {
+                    Some(pos) => format!("{pos} {}", s.text),
+                    None => s.text.clone(),
                 })
                 .collect::<Vec<_>>()
                 .join(" · ")

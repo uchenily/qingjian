@@ -19,7 +19,7 @@ pub const DEFAULT_PAGE_KEYS: (char, char) = ('[', ']');
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GeneralConfig {
-    /// 学习语言（ISO 639-1，`en` / `ja` / `es`）：候选旁显示哪种语言的译文。要有对应的释义表文件才生效。
+    /// 学习语言（ISO 639-1，目前只有 `en`）：候选旁显示哪种语言的译文。要有对应的释义表文件才生效。
     pub learning_language: String,
 
     /// 每页候选数，1–9。

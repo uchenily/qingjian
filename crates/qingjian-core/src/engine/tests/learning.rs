@@ -427,16 +427,15 @@ fn committing_the_translation_learns_the_word_and_returns_the_gloss() {
     struct KaifaTranslator;
     impl Translator for KaifaTranslator {
         fn language(&self) -> Language {
-            Language::Japanese
+            Language::English
         }
         fn translate(&self, text: &str) -> Option<Translation> {
             (text == "开发").then(|| {
                 Translation::new(
-                    Language::Japanese,
+                    Language::English,
                     vec![Sense {
                         part_of_speech: Some(PartOfSpeech::Verb),
-                        text: "開発する".into(),
-                        reading: Some("かいはつする".into()),
+                        text: "develop".into(),
                         fresh: false,
                     }],
                 )
@@ -458,7 +457,7 @@ fn committing_the_translation_learns_the_word_and_returns_the_gloss() {
         .unwrap();
     assert_eq!(
         engine.commit_translation(&kaifa, 0).as_deref(),
-        Some("開発する")
+        Some("develop")
     );
     // 拼音按候选消耗，剩下的接着组句；这个词记了学习
     assert_eq!(engine.composition().text(), "zhe");

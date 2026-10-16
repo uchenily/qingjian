@@ -11,7 +11,7 @@ pub(crate) enum Tone {
     /// 生词的译文（`Sense::fresh`），用强调色。
     Fresh,
 
-    /// 词性、假名注音与分隔符，最浅。
+    /// 词性、译词与分隔符，最浅。
     Faint,
 }
 
@@ -48,12 +48,7 @@ impl Row {
                 } else {
                     Tone::Gloss
                 };
-                for segment in sense.furigana() {
-                    annotation.push((segment.text, tone));
-                    if let Some(reading) = segment.reading {
-                        annotation.push((format!("({reading})"), Tone::Faint));
-                    }
-                }
+                annotation.push((sense.text.clone(), tone));
             }
         }
         Self {

@@ -47,7 +47,7 @@ impl Engine {
     /// 上屏：记入学习，从缓冲区消耗掉该候选对应的拼音，返回要提交给应用的文本。
     ///
     /// 上屏候选的译文而不是候选本身（壳里修饰键 + 数字）：学习、拼音消耗都和选了这个候选一样，
-    /// 返回第 `sense` 条释义的译文（0 是第一条，日文不带注音）。候选没有那么多条释义时不动，返回 `None`。
+    /// 返回第 `sense` 条释义的译文（0 是第一条）。候选没有那么多释义时不动，返回 `None`。
     pub fn commit_translation(&mut self, candidate: &Candidate, sense: usize) -> Option<String> {
         let text = candidate
             .translation

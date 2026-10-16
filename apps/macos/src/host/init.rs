@@ -49,7 +49,7 @@ pub fn init(mtm: MainThreadMarker, info: &BundleInfo) -> Result<(), HostError> {
         .with_learner(Box::new(learner));
     // 输入统计（打了多少字）：与学习数据同目录；没有数据目录就只在内存里数
     if let Some(dir) = paths::user_data_dir() {
-        // 词汇等级表（levels-en.tsv / levels-ja.tsv）随包可选：有就按级统计
+        // 词汇等级表（levels-en.tsv）随包可选：有就按级统计
         let mut vocabulary = VocabularyBook::open(dir.join(VOCABULARY_FILE));
         for language in GLOSSARY_LANGUAGES {
             let Ok(path) = paths::resource(&format!("levels-{}.tsv", language.code())) else {

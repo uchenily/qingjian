@@ -275,7 +275,7 @@ mod tests {
         book.record_exposure_on(en, "hello", date("2026-09-05"));
         book.record_commit_on(en, "hello", false, date("2026-09-05"));
         book.record_commit_on(en, "world", true, date("2026-09-06"));
-        book.record_exposure_on(Language::Japanese, "開発する", date("2026-09-06"));
+        book.record_exposure_on(Language::Chinese, "开发", date("2026-09-06"));
         assert_eq!(book.exposures(en, "develop"), FRESH_UNTIL);
         assert_eq!(book.exposures(en, "nothing"), 0);
         let summary = book.summary_on(en, date("2026-09-06"));
@@ -291,7 +291,7 @@ mod tests {
             }
         );
         assert_eq!(
-            book.summary_on(Language::Japanese, date("2026-09-06")).seen,
+            book.summary_on(Language::Chinese, date("2026-09-06")).seen,
             1
         );
     }

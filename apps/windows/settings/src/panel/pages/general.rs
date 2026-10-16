@@ -7,8 +7,7 @@ use crate::panel::controls::{field, index_of, page};
 use crate::panel::{Message, Settings};
 
 /// 学习语言：界面名 + 配置写法。
-pub(crate) const LANGUAGES: [(&str, &str); 3] =
-    [("英语", "en"), ("日语", "ja"), ("西班牙语", "es")];
+pub(crate) const LANGUAGES: [(&str, &str); 1] = [("英语", "en")];
 
 /// 双拼方案：界面名 + 配置写法（空串为全拼）。
 pub(crate) const SHUANGPIN: [(&str, &str); 5] = [
@@ -53,7 +52,7 @@ pub(crate) fn view(settings: &Settings, context: &mut ViewContext<Settings>) -> 
         ),
         field(
             "双拼",
-            "开双拼后 v、u、i 是音节键，表达式与问字模式只能用 ? 开头进；微软、搜狗方案的 ; 键是 ing。",
+            "开双拼后 v、u、i 是音节键；微软、搜狗方案的 ; 键是 ing。",
             string_combo(
                 &SHUANGPIN,
                 &g.shuangpin,

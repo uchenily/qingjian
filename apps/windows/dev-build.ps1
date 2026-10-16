@@ -64,7 +64,7 @@ $DataAssets = @('qingjian-data.tar.gz', 'model.qjm', 'SHA256SUMS')
 
 # 安装包要的随包数据（Server 启动也要这些）。
 $RequiredGenerated = @(
-    'dict.qj', 'lm.qj', 'glossary-en.qj', 'glossary-ja.qj', 'glossary-zh.qj', 'english.tsv'
+    'dict.qj', 'lm.qj', 'glossary-en.qj', 'glossary-zh.qj', 'english.tsv'
 )
 
 # 产物路径（按构建配置）。

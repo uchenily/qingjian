@@ -30,7 +30,7 @@ const ATTRIBUTIONS: &[(&str, &str)] = &[
     ),
     (
         "词汇等级",
-        "CEFR-J Wordlist v1.5（Yukio Tono，cefr-j.org）；Octanove Vocabulary Profile C1/C2（CC BY-SA 4.0）；JLPT 词表（tanos.co.uk，CC BY）。",
+        "CEFR-J Wordlist v1.5（Yukio Tono，cefr-j.org）；Octanove Vocabulary Profile C1/C2（CC BY-SA 4.0）。",
     ),
 ];
 

@@ -8,14 +8,8 @@ pub enum Language {
     /// 中文，目前唯一的主语言。
     Chinese,
 
-    /// 英语。
+    /// 英语，目前唯一的学习语言。
     English,
-
-    /// 日语。
-    Japanese,
-
-    /// 西班牙语。
-    Spanish,
 }
 
 impl Language {
@@ -24,8 +18,6 @@ impl Language {
         match self {
             Self::Chinese => "zh",
             Self::English => "en",
-            Self::Japanese => "ja",
-            Self::Spanish => "es",
         }
     }
 }
@@ -41,8 +33,6 @@ impl FromStr for Language {
         match s.trim().to_ascii_lowercase().as_str() {
             "zh" | "zh-cn" | "chinese" => Ok(Self::Chinese),
             "en" | "english" => Ok(Self::English),
-            "ja" | "jp" | "japanese" => Ok(Self::Japanese),
-            "es" | "es-es" | "spanish" => Ok(Self::Spanish),
             other => Err(UnknownLanguage(other.to_owned())),
         }
     }
@@ -54,22 +44,21 @@ mod tests {
 
     #[test]
     fn parses_language_codes_case_insensitively() {
-        assert_eq!("es".parse::<Language>().unwrap(), Language::Spanish);
-        assert_eq!("ES".parse::<Language>().unwrap(), Language::Spanish);
-        assert_eq!(" es-ES ".parse::<Language>().unwrap(), Language::Spanish);
-        assert_eq!("Spanish".parse::<Language>().unwrap(), Language::Spanish);
+        assert_eq!("en".parse::<Language>().unwrap(), Language::English);
+        assert_eq!("EN".parse::<Language>().unwrap(), Language::English);
+        assert_eq!(" English ".parse::<Language>().unwrap(), Language::English);
         assert_eq!("zh-cn".parse::<Language>().unwrap(), Language::Chinese);
     }
 
     #[test]
     fn rejects_unknown_codes() {
-        let error = "de".parse::<Language>().unwrap_err();
-        assert_eq!(error.0, "de");
+        let error = "ja".parse::<Language>().unwrap_err();
+        assert_eq!(error.0, "ja");
     }
 
     #[test]
     fn codes_are_iso_639_1() {
-        assert_eq!(Language::Spanish.code(), "es");
-        assert_eq!(Language::Japanese.code(), "ja");
+        assert_eq!(Language::English.code(), "en");
+        assert_eq!(Language::Chinese.code(), "zh");
     }
 }
