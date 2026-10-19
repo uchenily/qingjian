@@ -84,6 +84,19 @@ fcitx::Text toPreedit(const QingjianFrame& frame) {
     return text;
 }
 
+/// 候选来源标记，按 kind 返回短后缀；中文与 emoji 不标（返回空串）。
+/// kind 值与 apps/linux/src/session.rs 的 KIND_* 常量对齐。
+const char* sourceMarkOf(uint8_t kind) {
+    switch (kind) {
+        case 1:  return "[句]";   // 整句
+        case 2:  return "[en]";   // 英文
+        case 4:  return "[v]";    // 快捷
+        case 6:  return "[自定义]"; // 自定义短语
+        case 7:  return "[生]";   // 模型生成
+        default: return "";       // 0 中文、5 emoji 不标
+    }
+}
+
 /// 把 QingjianFrame 里的候选翻译成 fcitx5 CandidateList。
 /// 序号用 setLabels 设成 1. 2. … 9.（页内位置），译文用 CandidateWord::setComment 显示在右侧。
 std::unique_ptr<fcitx::CandidateList> toCandidates(const QingjianFrame& frame) {
@@ -105,12 +118,24 @@ std::unique_ptr<fcitx::CandidateList> toCandidates(const QingjianFrame& frame) {
         const auto& view = frame.candidates[i];
         const char* str = view.text ? view.text : "";
         fcitx::Text comment;
-        // 神经重排排到第一的整句候选：右侧标注前加 ✦ 标识
-        if (view.rescored) {
-            comment.append("✦");
-        }
+        // 译文在前
         if (view.translation && *view.translation) {
             comment.append(std::string(view.translation));
+        }
+        // 后缀：来源标记 + ✦（经过神经模型处理：重排顶上的整句，或模型直接生成）。
+        // 中文(0)与 emoji(5)无来源标记，且 rescored 只会落在整句上，故不会出现孤立的 ✦。
+        const char* sourceMark = sourceMarkOf(view.kind);
+        bool modelTouched = view.rescored || view.kind == 7;  // 7 = KIND_GENERATED
+        if (sourceMark[0] != '\0' || modelTouched) {
+            if (!comment.toString().empty()) {
+                comment.append(" ");
+            }
+            if (sourceMark[0] != '\0') {
+                comment.append(std::string(sourceMark));
+            }
+            if (modelTouched) {
+                comment.append("✦");
+            }
         }
         auto word = std::make_unique<QingjianCandidateWord>(
             fcitx::Text(std::string(str)), std::move(comment));
