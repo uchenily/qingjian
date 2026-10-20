@@ -641,3 +641,30 @@ fn shuangpin_picks_longest_english_word_over_short_acronym() {
     let query = engine.query().unwrap();
     assert_eq!(query.candidates.items[0].text, "我的database");
 }
+
+/// 句首英文词本身也能解成完整双拼（`competes=true`）时仍要出候选：`schemabuyiyh` → schema不一样。
+/// `schema` 六键正好解成 `sao'he'ma`，`competes=true` 必须走 `mixed_beats_plain` 比分；
+/// 修复前 `head_len==0` 时 `convert("")` 失败让比分直接返回 false，句首英文词永远 `head_wins=false`、
+/// 候选里出不来 `schema`。空头段应按得分 0 参与比分，而不是整体放弃。
+#[test]
+fn shuangpin_initial_english_word_that_also_reads_as_pinyin_appears() {
+    let dictionary = Dictionary::parse(
+        "不	bu	9000\n一	yi	9000\n样	yang	9000\n扫	sao	100\n喝	he	100\n吗	ma	100\n",
+    )
+    .unwrap();
+    let mut engine = Engine::new(dictionary)
+        .with_english(WordList::parse("schema	schema	9000000\n").unwrap())
+        .with_learner(Box::new(CountingLearner::new()));
+    engine.set_shuangpin(Some(Scheme::Xiaohe));
+    engine.set_input("schemabuyiyh");
+    let query = engine.query().unwrap();
+    assert!(
+        query
+            .candidates
+            .items
+            .iter()
+            .any(|c| c.text.starts_with("schema")),
+        "句首英文词 schema 应作为候选出现，实际候选：{:?}",
+        query.candidates.items.iter().map(|c| &c.text).collect::<Vec<_>>()
+    );
+}

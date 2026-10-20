@@ -174,15 +174,20 @@ impl Engine {
             let segmentations = parser::segment(&pinyin).ok()?;
             self.convert_sentence_static(&segmentations.first()?.patterns(), whole)
         };
-        let (Some(head), Some(plain)) = (
-            convert(&scope[..tail.head_len], false),
-            convert(scope, true),
-        ) else {
+        // 句首英文词（`head_len == 0`）时头段为空，得分按 0 算：`schemabuyiyh` → schema + 不一样，
+        // 英文词 `schema` 本身也能解成 `sao'he'ma`（`competes=true`）必须走比分，空段不能因
+        // `convert("")` 失败就整体放弃，否则句首英文词永远 `head_wins=false`、候选里出不来。
+        let head_score = if tail.head_len == 0 {
+            0.0
+        } else {
+            match convert(&scope[..tail.head_len], false) {
+                Some(head) if !head.has_placeholder() => head.score,
+                _ => return false,
+            }
+        };
+        let Some(plain) = convert(scope, true) else {
             return false;
         };
-        if head.has_placeholder() {
-            return false;
-        }
         // 句中英文词有后拼音段，后段分数也要算进去（`zvjibfdeyrzejquibungiidc` 的后段
         // 是「的原则就是不能吃到」，不算的话头段「最基」单独分高会误判英文赢）。
         let suffix_score = if tail.word_end < scope.len() {
@@ -200,7 +205,7 @@ impl Engine {
         // 用户选过这个英文词时不扣切换代价：冷启动时 penalty 拦住误切（`womenqubeijing` 不出 我们去Beijing），
         // 但用户教过 `nice` 就该让它赢，penalty 3 nat 会压过 weight_bonus（封顶 ~2.4）。
         let penalty = if english_weight > 0 { 0.0 } else { ENGLISH_SWITCH_PENALTY };
-        head.score + suffix_score + tail.log_prob + english_bonus - penalty > plain.score
+        head_score + suffix_score + tail.log_prob + english_bonus - penalty > plain.score
     }
 
     /// 拼音段转成的汉字加上英文词（及后拼音段）：`woxiangxuehaorust` → 我想学好 + rust、
