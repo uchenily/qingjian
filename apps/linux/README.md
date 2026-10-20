@@ -7,7 +7,7 @@
 ```
 fcitx5 进程
 ├── libqingjian.so        ← C++ shim：实现 fcitx::InputMethodEngine
-│   ├── engine.cpp        把 fcitx5 KeyEvent 翻译成 C ABI 调用；定时器驱动 qingjian_poll
+│   ├── engine.cpp        把 fcitx5 KeyEvent 翻译成 C ABI 调用；定时器驱动 qingjian_poll；监听 FocusOut / Destroyed / CapabilityChanged 管理会话生命周期
 │   ├── factory.cpp       fcitx5 addon 工厂注册
 │   └── abi.h             Rust cdylib 的 C ABI 声明
 └── libqingjian_linux.so  ← Rust cdylib：装配 Engine、按键分派、生成帧
@@ -23,6 +23,10 @@ fcitx5 进程
 Engine 在 fcitx5 进程内运行（与 macOS IMK 同进程模式一致），不需要 Windows 那套 IPC。
 C++ shim 只做「fcitx5 事件 → C ABI → fcitx5 InputPanel」的翻译，不碰排序 / 词库 / 翻译。
 本地整句模型的重排由 shim 的 fcitx5 定时器周期性调 `qingjian_poll` 驱动（与 macOS 的 NSTimer、Windows 的工人循环 tick 对齐）。
+
+会话生命周期：shim 用弱引用追踪当前 InputContext，监听 FocusOut（清组句 + 落盘）、
+Destroyed（清弱引用 + 停轮询）、CapabilityChanged（密码 / 禁用字段放行）事件。
+密码框（如 GDM 登录页）不经过输入法，避免锁屏后 fcitx5 无响应。
 
 ## 依赖
 

@@ -104,4 +104,6 @@
     模型单文件 `.qjm` 已做（2026-09-12，复用 `.qj` 容器 `Kind::Model`，`find_model` 先 `.qjm` 再三件套目录，`pack model` / `tools/release/pack-model.sh`，
     data Release 传 `model.qjm`，bundle.sh / qingjian.iss 只带一个文件），待 mac 与 box 真机各装一次验加载与重排；
     密码框已按 TSF 规范做（2026-09-12）：`KEYBOARD_DISABLED` compartment 整键放行不组句，`IS_PRIVATE` / 密码 / PIN 输入范围为私密（组句但不学不记不发云端，`ClientMessage::Privacy` → `Engine::set_private`），box 真机验过：Edge 密码框整键放行；InPrivate 网页文本框报 `IS_SEARCH` 不报 `IS_PRIVATE`，私密路径只靠单测覆盖；CI 两个 job 都从 `data` Release 取 `model.qjm`（已做）。
-- [ ] Linux IBus / Fcitx（Phase 5）；配置同步、跨平台词库
+- [~] Linux fcitx5（Phase 5，分支 `feat/linux-fcitx5`）：
+  - [x] **会话生命周期管理**（2026-10-20）：shim 监听 `FocusOut` / `InputContextDestroyed` / `CapabilityChanged` 事件，弱引用追踪当前 IC；密码 / 禁用字段（GDM 登录页密码框）放行不经过输入法。修复锁屏后 fcitx5 无响应、输密码没反应的问题。
+  - [ ] 配置同步、跨平台词库

@@ -6,6 +6,10 @@
 // - 把 Rust 返回的 QingjianFrame 翻译成 fcitx5 的 preedit（TextFormat）与候选表（CommonCandidateList）
 //
 // 不碰排序 / 词库 / 翻译——那些都在 Rust 侧的 Engine 里。
+//
+// 会话生命周期：fcitx5 的 InputContext 随时可能失焦、销毁、切输入法（锁屏 / 切窗口 / 密码框）。
+// 这里用弱引用追踪当前 IC，并监听 FocusOut / Destroyed / CapabilityChanged 事件，
+// 及时清组句、停轮询、放行密码字段，避免对已失效的 IC 操作（锁屏后 fcitx5 无响应的根因）。
 #include "engine.h"
 
 #include "abi.h"
@@ -186,12 +190,43 @@ QingjianEngine::QingjianEngine(fcitx::Instance* instance)
         // 初始停着，等第一次 keyEvent 启动
         poll_timer_->setEnabled(false);
     }
+
+    // 监听焦点离开：锁屏 / 切窗口 / 切输入法时，fcitx5 发 FocusOut。
+    // 此时调 qingjian_focus_out 清组句、落盘，并清当前 IC 弱引用——
+    // 否则组句状态残留，重排定时器会对已失焦的 IC 重画，或对锁屏后的新 IC（密码框）污染状态。
+    focus_out_watcher_ = instance_->watchEvent(
+        fcitx::EventType::InputContextFocusOut,
+        fcitx::EventWatcherPhase::PreInputMethod,
+        [this](fcitx::Event& event) {
+            auto* ic = static_cast<fcitx::InputContextEvent&>(event).inputContext();
+            handleFocusOut(ic);
+        });
+
+    // 监听 IC 销毁：IC 被应用释放时清弱引用、停轮询，避免悬垂指针。
+    destroyed_watcher_ = instance_->watchEvent(
+        fcitx::EventType::InputContextDestroyed,
+        fcitx::EventWatcherPhase::PreInputMethod,
+        [this](fcitx::Event& event) {
+            auto* ic = static_cast<fcitx::InputContextEvent&>(event).inputContext();
+            handleDestroyed(ic);
+        });
+
+    // 监听能力变化：普通框切到密码框（或反过来）时重新评估。
+    // 密码 / 禁用字段不该经过输入法，及时清组句、放行。
+    capability_watcher_ = instance_->watchEvent(
+        fcitx::EventType::InputContextCapabilityChanged,
+        fcitx::EventWatcherPhase::PreInputMethod,
+        [this](fcitx::Event& event) {
+            auto* ic = static_cast<fcitx::InputContextEvent&>(event).inputContext();
+            handleCapabilityChanged(ic);
+        });
 }
 
 QingjianEngine::~QingjianEngine() {
     // 不调 qingjian_shutdown：fcitx5 卸载 addon 时先 dlclose(libqingjian_linux.so) 再执行
     // 本析构，此时 qingjian_shutdown 符号已不可用会段错误。落盘在 focus_out / 定时 flush 里已做，
     // 进程退出时 Rust 侧的 OnceLock 自然释放。
+    // 事件监听器（unique_ptr<EventHandler>）随析构自动解绑。
 }
 
 void QingjianEngine::activate(const fcitx::InputMethodEntry& /*entry*/,
@@ -202,12 +237,17 @@ void QingjianEngine::activate(const fcitx::InputMethodEntry& /*entry*/,
 void QingjianEngine::deactivate(const fcitx::InputMethodEntry& /*entry*/,
                                 fcitx::InputContextEvent& event) {
     auto* ic = event.inputContext();
+    // 切输入法 / 失焦：把缓冲原样上屏、落盘、收起候选窗。
+    // 用 focus_out 而非 reset：focus_out 会触发后台落盘，reset 不落盘。
     char commit_buf[256] = {};
-    qingjian_reset(commit_buf, sizeof(commit_buf));
+    qingjian_focus_out(commit_buf, sizeof(commit_buf));
     if (commit_buf[0] != '\0') {
         commitText(ic, commit_buf);
     }
     hidePanel(ic);
+    if (current_ic_.get() == ic) {
+        current_ic_.unwatch();
+    }
 }
 
 void QingjianEngine::keyEvent(const fcitx::InputMethodEntry& /*entry*/,
@@ -217,8 +257,15 @@ void QingjianEngine::keyEvent(const fcitx::InputMethodEntry& /*entry*/,
         return;
     }
 
-    // �下当前 InputContext，重排定时器用它重画
-    current_ic_ = ic;
+    // 密码 / 禁用字段：放行，不经过输入法。
+    // GDM 登录页的密码框带 Password capability；在密码框里跑中文输入法会吞掉字母、
+    // 还会让 fcitx5 主线程在处理 GDM IC 时与用户会话的组句状态纠缠，导致锁屏后无法输入。
+    if (isPrivateField(ic)) {
+        return;
+    }
+
+    // 记下当前 InputContext（弱引用），重排定时器用它重画。IC 销毁后弱引用自动失效。
+    current_ic_ = ic->watch();
 
     // 组句开始：确保轮询定时器在跑（闲时被停过的话这里重启）
     if (poll_timer_ && !poll_timer_->isEnabled()) {
@@ -238,9 +285,11 @@ void QingjianEngine::keyEvent(const fcitx::InputMethodEntry& /*entry*/,
 
     // 取光标前文本给神经重排模型当上下文（与 macOS / Windows 壳对齐）。
     // 应用不支持 surrounding text 时传 nullptr，Engine 退回本会话历史。
+    // 密码 / 敏感字段不取前文（隐私）。
     const char* context_ptr = nullptr;
     uint32_t cursor_chars = 0;
-    if (ic->capabilityFlags().test(fcitx::CapabilityFlag::SurroundingText)) {
+    if (ic->capabilityFlags().test(fcitx::CapabilityFlag::SurroundingText)
+        && !ic->capabilityFlags().test(fcitx::CapabilityFlag::Sensitive)) {
         const auto& surrounding = ic->surroundingText();
         if (surrounding.isValid() && !surrounding.text().empty()) {
             context_ptr = surrounding.text().c_str();
@@ -282,8 +331,8 @@ void QingjianEngine::keyEvent(const fcitx::InputMethodEntry& /*entry*/,
 void QingjianEngine::reset(const fcitx::InputMethodEntry& /*entry*/,
                            fcitx::InputContextEvent& event) {
     auto* ic = event.inputContext();
-    if (current_ic_ == ic) {
-        current_ic_ = nullptr;
+    if (current_ic_.get() == ic) {
+        current_ic_.unwatch();
     }
     char commit_buf[256] = {};
     qingjian_reset(commit_buf, sizeof(commit_buf));
@@ -355,9 +404,12 @@ void QingjianEngine::hidePanel(fcitx::InputContext* ic) {
 }
 
 int32_t QingjianEngine::onPollTick() {
-    // 没有活跃的输入上下文就不轮询
-    auto* ic = current_ic_;
-    if (!ic) return -1;
+    // 弱引用判活：IC 已销毁 / 失焦就不重画，停掉定时器
+    auto* ic = current_ic_.get();
+    if (!ic) {
+        if (poll_timer_) poll_timer_->setEnabled(false);
+        return -1;
+    }
     QingjianFrame frame = {};
     int32_t got = qingjian_poll(&frame);
     if (got == 1) {
@@ -370,6 +422,55 @@ int32_t QingjianEngine::onPollTick() {
     }
     // got == 0：还在等防抖 / 后台打分，继续轮询
     return got;
+}
+
+void QingjianEngine::handleFocusOut(fcitx::InputContext* ic) {
+    if (!ic) return;
+    // 焦点离开：清组句、落盘、收起候选窗
+    char commit_buf[256] = {};
+    qingjian_focus_out(commit_buf, sizeof(commit_buf));
+    if (commit_buf[0] != '\0') {
+        commitText(ic, commit_buf);
+    }
+    hidePanel(ic);
+    // 若离开的是当前 IC，清弱引用、停轮询（重排结果不再需要重画）
+    if (current_ic_.get() == ic) {
+        current_ic_.unwatch();
+        if (poll_timer_) poll_timer_->setEnabled(false);
+    }
+}
+
+void QingjianEngine::handleDestroyed(fcitx::InputContext* ic) {
+    if (!ic) return;
+    // IC 销毁：若是当前 IC，清弱引用、停轮询，避免悬垂指针
+    if (current_ic_.get() == ic) {
+        current_ic_.unwatch();
+        if (poll_timer_) poll_timer_->setEnabled(false);
+    }
+}
+
+void QingjianEngine::handleCapabilityChanged(fcitx::InputContext* ic) {
+    if (!ic) return;
+    // 能力变成密码 / 禁用：清组句、收起候选窗、放行后续按键
+    if (isPrivateField(ic)) {
+        char commit_buf[256] = {};
+        qingjian_reset(commit_buf, sizeof(commit_buf));
+        if (commit_buf[0] != '\0') {
+            commitText(ic, commit_buf);
+        }
+        hidePanel(ic);
+        if (current_ic_.get() == ic) {
+            current_ic_.unwatch();
+            if (poll_timer_) poll_timer_->setEnabled(false);
+        }
+    }
+}
+
+bool QingjianEngine::isPrivateField(fcitx::InputContext* ic) {
+    if (!ic) return false;
+    const auto caps = ic->capabilityFlags();
+    return caps.test(fcitx::CapabilityFlag::Password)
+        || caps.test(fcitx::CapabilityFlag::Disable);
 }
 
 } // namespace qingjian

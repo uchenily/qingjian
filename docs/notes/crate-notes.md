@@ -124,6 +124,7 @@ fcitx5 addon：C++ shim（`shim/`，实现 `fcitx::InputMethodEngine`）+ Rust c
 - 日志在 `~/.config/qingjian/logs/`（按天分文件留 7 天），级别按 `[general] log_level`（`RUST_LOG` 可覆盖）。
 - 本地整句模型：与 macOS / Windows 对齐。`paths::model_path` 找用户目录 `model/` 优先、否则随包 `model/`（`qingjian_neural::find_model`）；`assembly::Host::apply_model_config` 按 `[model] enabled` 后台加载并预热（`load_local_model`），加载完 `attach_loaded_model` 接 `set_async_sentence_scorer`。节拍由 `rescore::RescoreState`（纯 Rust，Instant 计时）记：按键后 `schedule_rescoring` 起防抖 80 ms，到点 `request_rescoring`、20 ms 轮询 `poll_rescoring`，分回来了重查重画当前页（翻过页 / 动过高亮不动）。驱动靠 shim 侧 fcitx5 重复定时器（`EventLoop::addTimeEvent`，20 ms）周期性调 `qingjian_poll`；第一版不取应用光标前文，退回本会话历史。
 - `bundle.sh` 打成 `.tar.gz`（含 `.so` + 数据 + 安装脚本），随包带 `data/model/model.qjm`（有才打包）。
+- 会话生命周期（shim `engine.cpp`）：fcitx5 的 InputContext 随时可能失焦 / 销毁 / 切输入法（锁屏 / 切窗口 / 密码框）。shim 用 `TrackableObjectReference` 弱引用追踪当前 IC，监听 `FocusOut` / `InputContextDestroyed` / `CapabilityChanged` 事件：FocusOut 调 `qingjian_focus_out` 清组句 + 落盘 + 收候选窗（与 Windows `key_sink` 失焦上屏对齐）；Destroyed 清弱引用 + 停轮询（不碰已销毁的 IC）；CapabilityChanged 进密码 / 禁用字段时 `qingjian_reset` 清组句 + 放行。`keyEvent` 开头检查 `Password` / `Disable` capability 直接放行——GDM 登录页密码框不经过输入法，避免锁屏后 fcitx5 无响应。
 
 ## apps/windows
 
